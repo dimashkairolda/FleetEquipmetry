@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "632995730535",
+    "project_id": "fleet-equipmetry-d7e61",
+    "storage_bucket": "fleet-equipmetry-d7e61.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:632995730535:android:2b59a7f1dd003695d370c2",
+        "android_client_info": {
+          "package_name": "com.mycompany.equipmetry2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyByc4pOdt9Yti4Nf_m6UKIpePQq4Xo_toU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

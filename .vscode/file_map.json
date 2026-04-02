@@ -1,0 +1,138 @@
+{
+  "upload_file_and_convert_to_base64.dart": {
+    "old_identifier_name": "uploadFileAndConvertToBase64",
+    "new_identifier_name": "uploadFileAndConvertToBase64",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "7a88ab34ce4313c30df3e879840c720b83365c4d31488d8e5a050b508b4cf1e6",
+    "original_checksum": "7a88ab34ce4313c30df3e879840c720b83365c4d31488d8e5a050b508b4cf1e6"
+  },
+  "update_response_by_id.dart": {
+    "old_identifier_name": "updateResponseById",
+    "new_identifier_name": "updateResponseById",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "b9cc204bcb96a0f0b8fdb4244fcc34ebdeebf81f6f546afa7d1ebb6782873ba6",
+    "original_checksum": "b9cc204bcb96a0f0b8fdb4244fcc34ebdeebf81f6f546afa7d1ebb6782873ba6"
+  },
+  "upload_file_and_convert_to_base64to_list.dart": {
+    "old_identifier_name": "uploadFileAndConvertToBase64toList",
+    "new_identifier_name": "uploadFileAndConvertToBase64toList",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "99f3d00684acfe62679fe9035ffcf04e1242cfb955aacf72a15588819457aecb",
+    "original_checksum": "99f3d00684acfe62679fe9035ffcf04e1242cfb955aacf72a15588819457aecb"
+  },
+  "update_response_by_id_zamery.dart": {
+    "old_identifier_name": "updateResponseByIdZamery",
+    "new_identifier_name": "updateResponseByIdZamery",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "594d7fa20a2a5a74a4442c6fb58d2eaf6c439310f7ee96e39a11412dc070bf05",
+    "original_checksum": "594d7fa20a2a5a74a4442c6fb58d2eaf6c439310f7ee96e39a11412dc070bf05"
+  },
+  "update_finished_on.dart": {
+    "old_identifier_name": "updateFinishedOn",
+    "new_identifier_name": "updateFinishedOn",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "d48d16159680f9c7aa62cfd9b9f0a2cc46730aea5b765751f344a2a0ded9f981",
+    "original_checksum": "d48d16159680f9c7aa62cfd9b9f0a2cc46730aea5b765751f344a2a0ded9f981"
+  },
+  "update_all_dates.dart": {
+    "old_identifier_name": "updateAllDates",
+    "new_identifier_name": "updateAllDates",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "9d77980ec27047413130fac35aa6cc1342ce2ca412262b9d871db762db776540",
+    "original_checksum": "9d77980ec27047413130fac35aa6cc1342ce2ca412262b9d871db762db776540"
+  },
+  "parse_jwt_token.dart": {
+    "old_identifier_name": "parseJwtToken",
+    "new_identifier_name": "parseJwtToken",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "227e1122a459bf1f9a117ef4a24461d630fd934b5e67edf83ad156ca55e64ff1",
+    "original_checksum": "227e1122a459bf1f9a117ef4a24461d630fd934b5e67edf83ad156ca55e64ff1"
+  },
+  "update_item_by_price.dart": {
+    "old_identifier_name": "updateItemByPrice",
+    "new_identifier_name": "updateItemByPrice",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "85a6141da7844c1cc4bb3596b597c025951374f89c58e366b354a4b2be315e23",
+    "original_checksum": "85a6141da7844c1cc4bb3596b597c025951374f89c58e366b354a4b2be315e23"
+  },
+  "convert_to_base64.dart": {
+    "old_identifier_name": "convertToBase64",
+    "new_identifier_name": "convertToBase64",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "8471cda8c47469df39fd3d9e47731e63d0b63c6705f7aed18a625be674a45c42",
+    "original_checksum": "8471cda8c47469df39fd3d9e47731e63d0b63c6705f7aed18a625be674a45c42"
+  },
+  "check_internet_connectivity.dart": {
+    "old_identifier_name": "checkInternetConnectivity",
+    "new_identifier_name": "checkInternetConnectivity",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "348c72f166bce55d5d3ed41f869706a95b1a4e4d0da98664e0cd1e5c54cf6869",
+    "original_checksum": "348c72f166bce55d5d3ed41f869706a95b1a4e4d0da98664e0cd1e5c54cf6869"
+  },
+  "update_started_on.dart": {
+    "old_identifier_name": "updateStartedOn",
+    "new_identifier_name": "updateStartedOn",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "c70f055d120a98c4371c03fe0219835dd8c1547d801c3c6986191d68b4ea9586",
+    "original_checksum": "c70f055d120a98c4371c03fe0219835dd8c1547d801c3c6986191d68b4ea9586"
+  },
+  "update_item_by_name.dart": {
+    "old_identifier_name": "updateItemByName",
+    "new_identifier_name": "updateItemByName",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "16624537f153b5854970686246fa00efa0fdcadb1c1a1fef484e468733ced856",
+    "original_checksum": "16624537f153b5854970686246fa00efa0fdcadb1c1a1fef484e468733ced856"
+  },
+  "update_all_statuses.dart": {
+    "old_identifier_name": "updateAllStatuses",
+    "new_identifier_name": "updateAllStatuses",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "3a3f188a1b1e72e6e644f8620e1ebe49a5843c1f3e95cc041d1eeb528fbf6710",
+    "original_checksum": "3a3f188a1b1e72e6e644f8620e1ebe49a5843c1f3e95cc041d1eeb528fbf6710"
+  },
+  "example_interceptor.dart": {
+    "old_identifier_name": "exampleInterceptor",
+    "new_identifier_name": "exampleInterceptor",
+    "type": "A",
+    "is_deleted": false,
+    "current_checksum": "7ceb6e10ff3c8267aefda9394f35df30ab4f0d25aab4119d6e97d79fb6118b37",
+    "original_checksum": "7ceb6e10ff3c8267aefda9394f35df30ab4f0d25aab4119d6e97d79fb6118b37"
+  },
+  "base64_image.dart": {
+    "old_identifier_name": "Base64Image",
+    "new_identifier_name": "Base64Image",
+    "type": "W",
+    "is_deleted": false,
+    "current_checksum": "d862e7e7112d24a582e2d8fcb8e9c347bec0cef43bada7fc85b26290223c4383",
+    "original_checksum": "d862e7e7112d24a582e2d8fcb8e9c347bec0cef43bada7fc85b26290223c4383"
+  },
+  "custom_functions.dart": {
+    "old_identifier_name": "CustomFunctions",
+    "new_identifier_name": "CustomFunctions",
+    "type": "F",
+    "is_deleted": false,
+    "current_checksum": "c15136f82d655290238b38177e9b0f1a77e9ec33378d075160f4829767780359",
+    "original_checksum": "c15136f82d655290238b38177e9b0f1a77e9ec33378d075160f4829767780359"
+  },
+  "pubspec.yaml": {
+    "old_identifier_name": "pubspec.yaml",
+    "new_identifier_name": "pubspec.yaml",
+    "type": "D",
+    "is_deleted": false,
+    "current_checksum": "b04c92f3981c2e1af82aa514f52ec983050db7ffc986fc72d1741c2255348704",
+    "original_checksum": "b04c92f3981c2e1af82aa514f52ec983050db7ffc986fc72d1741c2255348704"
+  }
+}
