@@ -4,6 +4,7 @@ import '/backend/schema/structs/index.dart';
 import '/backend/api_requests/api_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'flutter_flow/flutter_flow_util.dart';
+import 'flutter_flow/bottom_nav_config.dart';
 
 class FFAppState extends ChangeNotifier {
   static FFAppState _instance = FFAppState._internal();
@@ -117,6 +118,12 @@ class FFAppState extends ChangeNotifier {
     _safeInit(() {
       _rememberPassword =
           prefs.getString('ff_rememberPassword') ?? _rememberPassword;
+    });
+    _safeInit(() {
+      final raw = prefs.getStringList('ff_bottomNavModuleIds');
+      if (raw != null && raw.isNotEmpty) {
+        _bottomNavModuleIds = FFAppState.sanitizeBottomNavModuleIds(raw);
+      }
     });
     _safeInit(() {
       if (prefs.containsKey('ff_alldefects')) {
@@ -769,6 +776,41 @@ class FFAppState extends ChangeNotifier {
   set rememberPassword(String value) {
     _rememberPassword = value;
     prefs.setString('ff_rememberPassword', value);
+  }
+
+  List<String> _bottomNavModuleIds =
+      List<String>.from(kDefaultBottomNavModuleIds);
+  List<String> get bottomNavModuleIds => List.unmodifiable(_bottomNavModuleIds);
+  set bottomNavModuleIds(List<String> value) {
+    _bottomNavModuleIds = FFAppState.sanitizeBottomNavModuleIds(value);
+    prefs.setStringList('ff_bottomNavModuleIds', _bottomNavModuleIds);
+    notifyListeners();
+  }
+
+  /// Known ids, no duplicates, max 5 items; [kProfileBottomNavModuleId] is always kept.
+  /// Falls back to default if the result would be empty or invalid.
+  static List<String> sanitizeBottomNavModuleIds(List<String> raw) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final id in raw) {
+      if (!kValidBottomNavModuleIds.contains(id) || seen.contains(id)) {
+        continue;
+      }
+      seen.add(id);
+      out.add(id);
+    }
+    if (!out.contains(kProfileBottomNavModuleId)) {
+      out.add(kProfileBottomNavModuleId);
+    }
+    while (out.length > 5) {
+      final idx = out.lastIndexWhere((e) => e != kProfileBottomNavModuleId);
+      if (idx < 0) break;
+      out.removeAt(idx);
+    }
+    if (out.isEmpty || !out.contains(kProfileBottomNavModuleId)) {
+      return List<String>.from(kDefaultBottomNavModuleIds);
+    }
+    return out;
   }
 
   DateTime? _selectedDay = DateTime.fromMillisecondsSinceEpoch(1704045600000);

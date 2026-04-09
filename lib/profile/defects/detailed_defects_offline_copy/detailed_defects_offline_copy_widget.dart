@@ -5,17 +5,14 @@ import '/flutter_flow/flutter_flow_expanded_image_view.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_config.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import '/profile/defects/createcentrzatrat/createcentrzatrat_widget.dart';
+import '/procurement/create_procurement/create_procurement_widget.dart';
 import '/profile/defects/delete_copy/delete_copy_widget.dart';
-import 'dart:ui';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:page_transition/page_transition.dart';
 import 'package:provider/provider.dart';
 
 import 'detailed_defects_offline_copy_model.dart';
@@ -547,14 +544,11 @@ class _DetailedDefectsOfflineCopyWidgetState
               child: Column(
                 mainAxisSize: MainAxisSize.max,
                 children: [
-                  Container(
-                    height: MediaQuery.sizeOf(context).height * 0.8,
-                    decoration: BoxDecoration(),
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.max,
-                        children: [
-                          Container(
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        Container(
                             decoration: BoxDecoration(
                               color: FlutterFlowTheme.of(context)
                                   .secondaryBackground,
@@ -715,9 +709,9 @@ class _DetailedDefectsOfflineCopyWidgetState
                               ],
                             ),
                           ),
-                          Container(
+                        Expanded(
+                          child: Container(
                             width: MediaQuery.sizeOf(context).width,
-                            height: MediaQuery.sizeOf(context).height,
                             decoration: BoxDecoration(
                               color: FlutterFlowTheme.of(context)
                                   .secondaryBackground,
@@ -825,9 +819,10 @@ class _DetailedDefectsOfflineCopyWidgetState
                                           color: FlutterFlowTheme.of(context)
                                               .primaryBackground,
                                         ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.max,
-                                          children: [
+                                        child: SingleChildScrollView(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.max,
+                                            children: [
                                             Padding(
                                               padding: EdgeInsetsDirectional
                                                   .fromSTEB(11.5, 8, 11.5, 0),
@@ -862,21 +857,161 @@ class _DetailedDefectsOfflineCopyWidgetState
                                                         (context, snapshot) {
                                                       // Customize what your widget looks like when it's loading.
                                                       if (!snapshot.hasData) {
-                                                        return Center(
-                                                          child: SizedBox(
-                                                            width: 50,
-                                                            height: 50,
-                                                            child:
-                                                                CircularProgressIndicator(
-                                                              valueColor:
-                                                                  AlwaysStoppedAnimation<
-                                                                      Color>(
-                                                                FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .primaryText,
+                                                        return Column(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Center(
+                                                              child: SizedBox(
+                                                                width: 50,
+                                                                height: 50,
+                                                                child:
+                                                                    CircularProgressIndicator(
+                                                                  valueColor:
+                                                                      AlwaysStoppedAnimation<
+                                                                          Color>(
+                                                                    FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .primaryText,
+                                                                  ),
+                                                                ),
                                                               ),
                                                             ),
-                                                          ),
+                                                            const SizedBox(
+                                                                height: 16),
+                                                            Container(
+                                                              width: double
+                                                                  .infinity,
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .all(12),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .primaryBackground,
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            10),
+                                                                border: Border.all(
+                                                                    color: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .alternate),
+                                                              ),
+                                                              child: Row(
+                                                                children: [
+                                                                  Icon(
+                                                                    (bottomNavMetaFor(
+                                                                                'Procurement')
+                                                                            ?.icon ??
+                                                                        Icons
+                                                                            .manage_search),
+                                                                    color: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .secondaryText,
+                                                                    size: 22,
+                                                                  ),
+                                                                  const SizedBox(
+                                                                      width: 10),
+                                                                  Expanded(
+                                                                    child: Text(
+                                                                      'Доска объявлений',
+                                                                      style: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .bodyMedium,
+                                                                    ),
+                                                                  ),
+                                                                  InkWell(
+                                                                    onTap:
+                                                                        () async {
+                                                                      final defectId =
+                                                                          getJsonField(
+                                                                        detailedDefectsOfflineCopyGetDetailedDefectsResponse
+                                                                            .jsonBody,
+                                                                        r'''$.id''',
+                                                                      ).toString();
+                                                                      final sparePartsRaw =
+                                                                          getJsonField(
+                                                                        detailedDefectsOfflineCopyGetDetailedDefectsResponse
+                                                                            .jsonBody,
+                                                                        r'''$.spare_parts''',
+                                                                        true,
+                                                                      );
+                                                                      final sparePartsList =
+                                                                          (sparePartsRaw
+                                                                                  is List)
+                                                                              ? sparePartsRaw
+                                                                              : <dynamic>[];
+
+                                                                      FFAppState().CTOInventoryItems = sparePartsList
+                                                                          .map((e) => SparePartsStruct.maybeFromMap(e))
+                                                                          .whereType<
+                                                                              SparePartsStruct>()
+                                                                          .map(
+                                                                            (p) =>
+                                                                                InventoryItemsStruct(
+                                                                              title: p.title,
+                                                                              productArticle: p.productArticle,
+                                                                              quantity: p.quantity,
+                                                                              unitOfMeasurement: 'шт',
+                                                                              defectId: defectId,
+                                                                              source: 'DEFECT',
+                                                                            ),
+                                                                          )
+                                                                          .toList();
+                                                                      safeSetState(
+                                                                          () {});
+
+                                                                      context
+                                                                          .pushNamed(
+                                                                        CreateProcurementWidget
+                                                                            .routeName,
+                                                                        queryParameters:
+                                                                            {
+                                                                          'initialTitle':
+                                                                              serializeParam(
+                                                                            getJsonField(
+                                                                              detailedDefectsOfflineCopyGetDetailedDefectsResponse.jsonBody,
+                                                                              r'''$.title''',
+                                                                            ).toString(),
+                                                                            ParamType.String,
+                                                                          ),
+                                                                        }.withoutNulls,
+                                                                      );
+                                                                    },
+                                                                    child:
+                                                                        Container(
+                                                                      padding: const EdgeInsets
+                                                                          .symmetric(
+                                                                          horizontal:
+                                                                              12,
+                                                                          vertical:
+                                                                              6),
+                                                                      decoration:
+                                                                          BoxDecoration(
+                                                                        color: FlutterFlowTheme.of(context)
+                                                                            .primary,
+                                                                        borderRadius:
+                                                                            BorderRadius.circular(8),
+                                                                      ),
+                                                                      child:
+                                                                          Text(
+                                                                        'Создать',
+                                                                        style: FlutterFlowTheme.of(context)
+                                                                            .bodySmall
+                                                                            .override(
+                                                                              fontFamily: 'SFProText',
+                                                                              color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                              letterSpacing: 0.0,
+                                                                            ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                          ],
                                                         );
                                                       }
                                                       final columnGetDefectStoreHouseOrderResponse =
@@ -1220,17 +1355,15 @@ class _DetailedDefectsOfflineCopyWidgetState
                                                                     borderRadius:
                                                                         BorderRadius
                                                                             .circular(8),
-                                                                    child: Image
-                                                                        .asset(
-                                                                      'assets/images/Icon-Toolbox.png',
-                                                                      width: MediaQuery.sizeOf(context)
-                                                                              .width *
-                                                                          0.08,
-                                                                      height: MediaQuery.sizeOf(context)
-                                                                              .height *
-                                                                          0.04,
-                                                                      fit: BoxFit
-                                                                          .cover,
+                                                                    child: Icon(
+                                                                      (bottomNavMetaFor('Procurement')
+                                                                              ?.icon ??
+                                                                          Icons
+                                                                              .manage_search),
+                                                                      color: FlutterFlowTheme.of(
+                                                                              context)
+                                                                          .secondaryText,
+                                                                      size: 28,
                                                                     ),
                                                                   ),
                                                                   Padding(
@@ -1264,7 +1397,7 @@ class _DetailedDefectsOfflineCopyWidgetState
                                                                               child: Padding(
                                                                                 padding: EdgeInsetsDirectional.fromSTEB(0, 0, 0, 3),
                                                                                 child: Text(
-                                                                                  'Ремонтное обеспечение',
+                                                                                  'Доска объявлений',
                                                                                   textAlign: TextAlign.start,
                                                                                   style: FlutterFlowTheme.of(context).bodySmall.override(
                                                                                         fontFamily: 'SFProText',
@@ -1279,189 +1412,100 @@ class _DetailedDefectsOfflineCopyWidgetState
                                                                           Builder(
                                                                             builder:
                                                                                 (context) {
-                                                                              if (functions.jsonToList(columnGetDefectStoreHouseOrderResponse.jsonBody).length == 0) {
-                                                                                return Column(
-                                                                                  mainAxisSize: MainAxisSize.max,
-                                                                                  children: [
-                                                                                    Align(
-                                                                                      alignment: AlignmentDirectional(-1, 0),
-                                                                                      child: InkWell(
-                                                                                        splashColor: Colors.transparent,
-                                                                                        focusColor: Colors.transparent,
-                                                                                        hoverColor: Colors.transparent,
-                                                                                        highlightColor: Colors.transparent,
-                                                                                        onTap: () async {
-                                                                                          var _shouldSetState = false;
-                                                                                          _model.apiResultu7h = await CentrZatratCall.call(
-                                                                                            token: currentAuthenticationToken,
-                                                                                            work: FFAppState().workspace,
-                                                                                          );
+                                                                              return Align(
+                                                                                alignment: AlignmentDirectional(-1, 0),
+                                                                                child: InkWell(
+                                                                                  splashColor: Colors.transparent,
+                                                                                  focusColor: Colors.transparent,
+                                                                                  hoverColor: Colors.transparent,
+                                                                                  highlightColor: Colors.transparent,
+                                                                                  onTap: () async {
+                                                                                    final defectId = getJsonField(
+                                                                                      detailedDefectsOfflineCopyGetDetailedDefectsResponse
+                                                                                          .jsonBody,
+                                                                                      r'''$.id''',
+                                                                                    ).toString();
+                                                                                    final sparePartsRaw = getJsonField(
+                                                                                      detailedDefectsOfflineCopyGetDetailedDefectsResponse
+                                                                                          .jsonBody,
+                                                                                      r'''$.spare_parts''',
+                                                                                      true,
+                                                                                    );
+                                                                                    final sparePartsList =
+                                                                                        (sparePartsRaw is List)
+                                                                                            ? sparePartsRaw
+                                                                                            : <dynamic>[];
 
-                                                                                          _shouldSetState = true;
-                                                                                          if ((_model.apiResultu7h?.succeeded ?? true)) {
-                                                                                            FFAppState().centrzatrat = (_model.apiResultu7h?.jsonBody ?? '');
-                                                                                            safeSetState(() {});
-                                                                                            await showModalBottomSheet(
-                                                                                              isScrollControlled: true,
-                                                                                              backgroundColor: Colors.transparent,
-                                                                                              enableDrag: false,
-                                                                                              context: context,
-                                                                                              builder: (context) {
-                                                                                                return GestureDetector(
-                                                                                                  onTap: () {
-                                                                                                    FocusScope.of(context).unfocus();
-                                                                                                    FocusManager.instance.primaryFocus?.unfocus();
-                                                                                                  },
-                                                                                                  child: Padding(
-                                                                                                    padding: MediaQuery.viewInsetsOf(context),
-                                                                                                    child: Container(
-                                                                                                      height: MediaQuery.sizeOf(context).height * 0.3,
-                                                                                                      child: CreatecentrzatratWidget(
-                                                                                                        defectid: getJsonField(
-                                                                                                          detailedDefectsOfflineCopyGetDetailedDefectsResponse.jsonBody,
-                                                                                                          r'''$.id''',
-                                                                                                        ).toString(),
-                                                                                                        tmc: getJsonField(
-                                                                                                          detailedDefectsOfflineCopyGetDetailedDefectsResponse.jsonBody,
-                                                                                                          r'''$.spare_parts''',
-                                                                                                        ),
-                                                                                                      ),
-                                                                                                    ),
-                                                                                                  ),
-                                                                                                );
-                                                                                              },
-                                                                                            ).then((value) => safeSetState(() {}));
-                                                                                          } else {
-                                                                                            ScaffoldMessenger.of(context).showSnackBar(
-                                                                                              SnackBar(
-                                                                                                content: Text(
-                                                                                                  (_model.apiResultu7h?.jsonBody ?? '').toString(),
-                                                                                                  style: TextStyle(
-                                                                                                    color: FlutterFlowTheme.of(context).primaryText,
-                                                                                                  ),
-                                                                                                ),
-                                                                                                duration: Duration(milliseconds: 4000),
-                                                                                                backgroundColor: FlutterFlowTheme.of(context).secondary,
+                                                                                    FFAppState().CTOInventoryItems =
+                                                                                        sparePartsList
+                                                                                            .map((e) =>
+                                                                                                SparePartsStruct
+                                                                                                    .maybeFromMap(e))
+                                                                                            .whereType<
+                                                                                                SparePartsStruct>()
+                                                                                            .map(
+                                                                                              (p) =>
+                                                                                                  InventoryItemsStruct(
+                                                                                                title: p.title,
+                                                                                                productArticle:
+                                                                                                    p.productArticle,
+                                                                                                quantity: p.quantity,
+                                                                                                unitOfMeasurement: 'шт',
+                                                                                                defectId: defectId,
+                                                                                                source: 'DEFECT',
                                                                                               ),
-                                                                                            );
-                                                                                            if (_shouldSetState) safeSetState(() {});
-                                                                                            return;
-                                                                                          }
+                                                                                            )
+                                                                                            .toList();
+                                                                                    safeSetState(() {});
 
-                                                                                          if (_shouldSetState) safeSetState(() {});
-                                                                                        },
-                                                                                        child: Container(
-                                                                                          decoration: BoxDecoration(
-                                                                                            color: FlutterFlowTheme.of(context).primary,
-                                                                                            borderRadius: BorderRadius.circular(10),
-                                                                                            shape: BoxShape.rectangle,
-                                                                                          ),
-                                                                                          child: Align(
-                                                                                            alignment: AlignmentDirectional(0, 0),
-                                                                                            child: Padding(
-                                                                                              padding: EdgeInsetsDirectional.fromSTEB(15, 5, 15, 5),
-                                                                                              child: Text(
-                                                                                                'Создать',
-                                                                                                style: FlutterFlowTheme.of(context).bodyLarge.override(
-                                                                                                      fontFamily: 'SFProText',
-                                                                                                      color: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                                                      fontSize: 15,
-                                                                                                      letterSpacing: 0.0,
-                                                                                                      fontWeight: FontWeight.normal,
-                                                                                                    ),
-                                                                                              ),
-                                                                                            ),
-                                                                                          ),
-                                                                                        ),
-                                                                                      ),
-                                                                                    ),
-                                                                                  ],
-                                                                                );
-                                                                              } else {
-                                                                                return Align(
-                                                                                  alignment: AlignmentDirectional(-1, 0),
-                                                                                  child: InkWell(
-                                                                                    splashColor: Colors.transparent,
-                                                                                    focusColor: Colors.transparent,
-                                                                                    hoverColor: Colors.transparent,
-                                                                                    highlightColor: Colors.transparent,
-                                                                                    onTap: () async {
-                                                                                      context.pushNamed(
-                                                                                        StoreHouseDetailedWidget.routeName,
-                                                                                        queryParameters: {
-                                                                                          'json': serializeParam(
-                                                                                            getJsonField(
-                                                                                              columnGetDefectStoreHouseOrderResponse.jsonBody,
-                                                                                              r'''$[0]''',
-                                                                                            ),
-                                                                                            ParamType.JSON,
-                                                                                          ),
-                                                                                          'id': serializeParam(
-                                                                                            getJsonField(
-                                                                                              columnGetDefectStoreHouseOrderResponse.jsonBody,
-                                                                                              r'''$[0].id''',
-                                                                                            ).toString(),
-                                                                                            ParamType.String,
-                                                                                          ),
-                                                                                          'status': serializeParam(
-                                                                                            getJsonField(
-                                                                                              columnGetDefectStoreHouseOrderResponse.jsonBody,
-                                                                                              r'''$[0].status''',
-                                                                                            ).toString(),
-                                                                                            ParamType.String,
-                                                                                          ),
-                                                                                        }.withoutNulls,
-                                                                                      );
-                                                                                    },
-                                                                                    child: Container(
-                                                                                      decoration: BoxDecoration(
-                                                                                        color: functions.colorRemontBG(valueOrDefault<String>(
+                                                                                    context.pushNamed(
+                                                                                      CreateProcurementWidget
+                                                                                          .routeName,
+                                                                                      queryParameters: {
+                                                                                        'initialTitle': serializeParam(
                                                                                           getJsonField(
-                                                                                            functions.jsonToList(columnGetDefectStoreHouseOrderResponse.jsonBody).lastOrNull,
-                                                                                            r'''$.status''',
-                                                                                          )?.toString(),
-                                                                                          'null',
-                                                                                        )),
-                                                                                        borderRadius: BorderRadius.circular(10),
-                                                                                        shape: BoxShape.rectangle,
-                                                                                      ),
-                                                                                      child: Align(
-                                                                                        alignment: AlignmentDirectional(0, 0),
-                                                                                        child: Padding(
-                                                                                          padding: EdgeInsetsDirectional.fromSTEB(15, 5, 15, 5),
-                                                                                          child: Text(
-                                                                                            valueOrDefault<String>(
-                                                                                              functions.statusToRemont(functions.listlength(columnGetDefectStoreHouseOrderResponse.jsonBody).toString() == '0'
-                                                                                                  ? widget!.storehousestatus
-                                                                                                  : valueOrDefault<String>(
-                                                                                                      getJsonField(
-                                                                                                        functions.jsonToList(columnGetDefectStoreHouseOrderResponse.jsonBody).lastOrNull,
-                                                                                                        r'''$.status''',
-                                                                                                      )?.toString(),
-                                                                                                      'null',
-                                                                                                    )),
-                                                                                              'nul',
-                                                                                            ),
-                                                                                            style: FlutterFlowTheme.of(context).bodyLarge.override(
-                                                                                                  fontFamily: 'SFProText',
-                                                                                                  color: functions.colorRemontText(valueOrDefault<String>(
-                                                                                                    getJsonField(
-                                                                                                      functions.jsonToList(columnGetDefectStoreHouseOrderResponse.jsonBody).lastOrNull,
-                                                                                                      r'''$.status''',
-                                                                                                    )?.toString(),
-                                                                                                    'null',
-                                                                                                  )),
-                                                                                                  fontSize: 15,
-                                                                                                  letterSpacing: 0.0,
-                                                                                                  fontWeight: FontWeight.normal,
-                                                                                                ),
-                                                                                          ),
+                                                                                            detailedDefectsOfflineCopyGetDetailedDefectsResponse
+                                                                                                .jsonBody,
+                                                                                            r'''$.title''',
+                                                                                          ).toString(),
+                                                                                          ParamType.String,
+                                                                                        ),
+                                                                                      }.withoutNulls,
+                                                                                    );
+                                                                                  },
+                                                                                  child: Container(
+                                                                                    decoration: BoxDecoration(
+                                                                                      color: FlutterFlowTheme.of(context)
+                                                                                          .primary,
+                                                                                      borderRadius:
+                                                                                          BorderRadius.circular(10),
+                                                                                      shape: BoxShape.rectangle,
+                                                                                    ),
+                                                                                    child: Align(
+                                                                                      alignment:
+                                                                                          AlignmentDirectional(0, 0),
+                                                                                      child: Padding(
+                                                                                        padding:
+                                                                                            EdgeInsetsDirectional.fromSTEB(
+                                                                                                15, 5, 15, 5),
+                                                                                        child: Text(
+                                                                                          'Создать',
+                                                                                          style: FlutterFlowTheme.of(context)
+                                                                                              .bodyLarge
+                                                                                              .override(
+                                                                                                fontFamily: 'SFProText',
+                                                                                                color: FlutterFlowTheme.of(context)
+                                                                                                    .secondaryBackground,
+                                                                                                fontSize: 15,
+                                                                                                letterSpacing: 0.0,
+                                                                                                fontWeight: FontWeight.normal,
+                                                                                              ),
                                                                                         ),
                                                                                       ),
                                                                                     ),
                                                                                   ),
-                                                                                );
-                                                                              }
+                                                                                ),
+                                                                              );
                                                                             },
                                                                           ),
                                                                         ],
@@ -2652,7 +2696,8 @@ Align(
                                                 ),
                                               ),
                                             ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                       Container(
@@ -4546,8 +4591,8 @@ Align(
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   if (valueOrDefault<String>(

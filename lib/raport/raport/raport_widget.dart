@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/form_field_controller.dart';
 import '/raport/chat_bot/chat_bot_widget.dart';
@@ -222,14 +223,15 @@ class _RaportWidgetState extends State<RaportWidget> {
             FocusManager.instance.primaryFocus?.unfocus();
           },
           child: PopScope(
-            canPop: false,
+            canPop: !BottomNavPrimaryTabScope.isPrimaryTabOf(context),
             child: Scaffold(
               key: scaffoldKey,
               backgroundColor: FlutterFlowTheme.of(context).accent4,
               appBar: AppBar(
                 backgroundColor:
                     FlutterFlowTheme.of(context).secondaryBackground,
-                automaticallyImplyLeading: false,
+                automaticallyImplyLeading:
+                    !BottomNavPrimaryTabScope.isPrimaryTabOf(context),
                 title: Builder(
                   builder: (context) {
                     if (!FFAppState().isSelected) {

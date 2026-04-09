@@ -1,5 +1,6 @@
 // ignore_for_file: unnecessary_getters_setters
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -31,8 +32,10 @@ class ManualKPSender extends StatefulWidget {
 class _ManualKPSenderState extends State<ManualKPSender> {
   List<dynamic> _suppliers = [];
   dynamic _selectedSupplier;
+  String? _selectedSupplierId;
   bool _isLoadingSuppliers = true;
   bool _isUploading = false;
+  bool _isSendingKp = false;
   bool _isCreatingSupplier = false;
   final List<String> _uploadedFileUrls = [];
   List<Map<String, dynamic>> _inventoryItems = [];
@@ -63,6 +66,7 @@ class _ManualKPSenderState extends State<ManualKPSender> {
   }
 
   void _initItemControllers() {
+    _bootstrapFromMyExistingOffer();
     final List items = widget.procurementData['inventory_items'] ?? [];
     _inventoryItems = items
         .whereType<Map>()
@@ -72,6 +76,69 @@ class _ManualKPSenderState extends State<ManualKPSender> {
       final String id = item['id'].toString();
       _priceControllers[id] = TextEditingController();
       _characteristics[id] = null;
+    }
+
+    final myEmail = _currentUserEmail();
+    if (myEmail.isEmpty) return;
+    for (final item in _inventoryItems) {
+      final id = item['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      final offers = item['offers'];
+      if (offers is! List) continue;
+      for (final o in offers) {
+        if (o is! Map) continue;
+        final cp = o['counterparty'];
+        final email =
+            (cp is Map ? cp['email'] : null)?.toString().trim().toLowerCase() ??
+                '';
+        if (email.isNotEmpty && email == myEmail) {
+          final price = o['price'];
+          if (price != null) {
+            _priceControllers[id]?.text = price.toString();
+          }
+          _characteristics[id] = o['characteristic']?.toString();
+          break;
+        }
+      }
+    }
+  }
+
+  String _currentUserEmail() {
+    final raw = getJsonField(
+      FFAppState().result,
+      r'''$.user.email''',
+    )?.toString();
+    return raw?.trim().toLowerCase() ?? '';
+  }
+
+  void _bootstrapFromMyExistingOffer() {
+    final myEmail = _currentUserEmail();
+    if (myEmail.isEmpty) return;
+    final offers = widget.procurementData['offers'];
+    if (offers is! List) return;
+    for (final o in offers) {
+      if (o is! Map) continue;
+      final cp = o['counterparty'];
+      final email =
+          (cp is Map ? cp['email'] : null)?.toString().trim().toLowerCase() ??
+              '';
+      if (email.isNotEmpty && email == myEmail) {
+        if (cp is Map) {
+          _selectedSupplier = Map<String, dynamic>.from(
+            cp.map((k, v) => MapEntry(k.toString(), v)),
+          );
+          _selectedSupplierId = _selectedSupplier['id']?.toString();
+        }
+        final deliveryPrice = o['price'];
+        if (deliveryPrice != null) {
+          _deliveryPriceController.text = deliveryPrice.toString();
+        }
+        final dt = o['delivery_time']?.toString();
+        if (dt != null && dt.trim().isNotEmpty) {
+          _deliveryTimeController.text = dt.trim();
+        }
+        break;
+      }
     }
   }
 
@@ -230,6 +297,7 @@ class _ManualKPSenderState extends State<ManualKPSender> {
         setState(() {
           _suppliers = [supplier, ..._suppliers];
           _selectedSupplier = supplier;
+          _selectedSupplierId = supplier['id']?.toString();
         });
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -390,6 +458,8 @@ class _ManualKPSenderState extends State<ManualKPSender> {
   }
 
   Future<void> _sendKP() async {
+    if (_isSendingKp || _isUploading) return;
+
     final String procurementId = widget.procurementData['id'].toString();
     final url = Uri.parse(
         'https://fleet.equipmetry.kz/api/v1/workspace/procurement/$procurementId/kp/send');
@@ -421,6 +491,7 @@ class _ManualKPSenderState extends State<ManualKPSender> {
       "file": _uploadedFileUrls.isEmpty ? null : _uploadedFileUrls,
     };
 
+    setState(() => _isSendingKp = true);
     try {
       final response = await http.post(
         url,
@@ -443,7 +514,35 @@ class _ManualKPSenderState extends State<ManualKPSender> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Ошибка: $e"), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isSendingKp = false);
     }
+  }
+
+  bool get _formLocked => _isSendingKp || _isUploading;
+
+  List<dynamic> get _supplierOptions {
+    final List<dynamic> base = List<dynamic>.from(_suppliers);
+    final seen = <String>{};
+    base.removeWhere((e) {
+      if (e is! Map) return true;
+      final id = e['id']?.toString();
+      if (id == null || id.isEmpty) return true;
+      if (seen.contains(id)) return true;
+      seen.add(id);
+      return false;
+    });
+    final sel = _selectedSupplier;
+    if (sel is Map) {
+      final sid = sel['id']?.toString();
+      final exists = sid != null &&
+          sid.isNotEmpty &&
+          base.any((e) => e is Map && e['id']?.toString() == sid);
+      if (!exists) {
+        base.insert(0, sel);
+      }
+    }
+    return base;
   }
 
   @override
@@ -452,46 +551,65 @@ class _ManualKPSenderState extends State<ManualKPSender> {
       width: widget.width,
       height: widget.height,
       color: FlutterFlowTheme.of(context).primaryBackground,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            _buildSection("Поставщик", [
-              _isLoadingSuppliers
-                  ? const Center(child: CircularProgressIndicator())
-                  : Column(
-                      children: [
-                        DropdownButtonFormField<dynamic>(
-                          decoration:
-                              _inputDecoration("Выберите поставщика (необязательно)"),
-                          initialValue: _selectedSupplier,
-                          items: [
-                            const DropdownMenuItem<dynamic>(
-                              value: null,
-                              child: Text('Без поставщика'),
-                            ),
-                            ..._suppliers.map((s) {
-                              return DropdownMenuItem<dynamic>(
-                                value: s,
-                                child: Text(s['title']?.toString() ?? '-'),
-                              );
-                            }),
-                          ],
-                          onChanged: (val) =>
-                              setState(() => _selectedSupplier = val),
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: _showCreateSupplierDialog,
-                            icon: const Icon(Icons.add_business_outlined),
-                            label: const Text('Добавить нового поставщика'),
+      child: Stack(
+        children: [
+          AbsorbPointer(
+            absorbing: _isSendingKp,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildSection("Поставщик", [
+                    _isLoadingSuppliers
+                        ? const Center(child: CircularProgressIndicator())
+                        : Column(
+                            children: [
+                              DropdownButtonFormField<dynamic>(
+                                decoration: _inputDecoration(
+                                    "Выберите поставщика (необязательно)"),
+                                initialValue: _selectedSupplierId,
+                                items: [
+                                  const DropdownMenuItem<dynamic>(
+                                    value: null,
+                                    child: Text('Без поставщика'),
+                                  ),
+                                  ..._supplierOptions.map((s) {
+                                    return DropdownMenuItem<dynamic>(
+                                      value: s['id']?.toString(),
+                                      child:
+                                          Text(s['title']?.toString() ?? '-'),
+                                    );
+                                  }),
+                                ],
+                                onChanged: _formLocked
+                                    ? null
+                                    : (val) => setState(() {
+                                        _selectedSupplierId = val?.toString();
+                                        if (_selectedSupplierId == null) {
+                                          _selectedSupplier = null;
+                                          return;
+                                        }
+                                        final match = _supplierOptions.cast<Map?>().firstWhere(
+                                          (s) => s?['id']?.toString() == _selectedSupplierId,
+                                          orElse: () => null,
+                                        );
+                                        _selectedSupplier = match;
+                                      }),
+                              ),
+                              const SizedBox(height: 10),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: _formLocked
+                                      ? null
+                                      : _showCreateSupplierDialog,
+                                  icon: const Icon(Icons.add_business_outlined),
+                                  label: const Text('Добавить нового поставщика'),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-            ]),
+                  ]),
             const SizedBox(height: 16),
             _buildSection("Документы", [
               if (_isUploading) const LinearProgressIndicator(),
@@ -500,7 +618,8 @@ class _ManualKPSenderState extends State<ManualKPSender> {
                 children: [
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _pickFile(true),
+                      onPressed:
+                          _formLocked ? null : () => _pickFile(true),
                       icon: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                       label: const Text("Камера", style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(backgroundColor: FlutterFlowTheme.of(context).primary),
@@ -509,7 +628,8 @@ class _ManualKPSenderState extends State<ManualKPSender> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: ElevatedButton.icon(
-                      onPressed: () => _pickFile(false),
+                      onPressed:
+                          _formLocked ? null : () => _pickFile(false),
                       icon: const Icon(Icons.file_present, color: Colors.white, size: 18),
                       label: const Text("Файл", style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(backgroundColor: FlutterFlowTheme.of(context).primary),
@@ -535,7 +655,10 @@ class _ManualKPSenderState extends State<ManualKPSender> {
                         trailing: IconButton(
                           icon: const Icon(Icons.delete_outline,
                               color: Colors.red, size: 20),
-                          onPressed: () => setState(() => _uploadedFileUrls.remove(url)),
+                          onPressed: _formLocked
+                              ? null
+                              : () => setState(
+                                  () => _uploadedFileUrls.remove(url)),
                         ),
                       );
                     }).toList(),
@@ -571,27 +694,72 @@ class _ManualKPSenderState extends State<ManualKPSender> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                    onPressed: _isSendingKp
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48)),
                     child: const Text("Отмена"),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                    child: ElevatedButton(
-                    onPressed: _isUploading ? null : _sendKP,
+                  child: ElevatedButton(
+                    onPressed: _formLocked ? null : _sendKP,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4B39EF),
                       minimumSize: const Size.fromHeight(48),
                     ),
-                    child: const Text("Добавить КП", style: TextStyle(color: Colors.white)),
+                    child: _isSendingKp
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text("Добавить КП",
+                            style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 40),
-          ],
-        ),
+                ],
+              ),
+            ),
+          ),
+          if (_isSendingKp)
+            Positioned.fill(
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.35),
+                child: Center(
+                  child: Card(
+                    elevation: 8,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CircularProgressIndicator(
+                            color: FlutterFlowTheme.of(context).primary,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Отправка КП…',
+                            style: FlutterFlowTheme.of(context).bodyMedium
+                                .copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import '/auth/custom_auth/auth_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/store_house/spare_parts_warehouse/spare_part_create_card_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
@@ -98,10 +99,22 @@ class _SparePartProfileWidgetState extends State<SparePartProfileWidget>
     });
     if (response.statusCode != 200) return null;
     final decoded = json.decode(utf8.decode(response.bodyBytes));
-    if (decoded is! Map<String, dynamic>) return null;
-    final inner = decoded['data'];
-    if (inner is Map<String, dynamic>) return inner;
-    return decoded;
+    if (decoded is! Map) return null;
+    final root = Map<String, dynamic>.from(
+      decoded.map((k, v) => MapEntry(k.toString(), v)),
+    );
+    final inner = root['data'];
+    if (inner is Map) {
+      return Map<String, dynamic>.from(
+        inner.map((k, v) => MapEntry(k.toString(), v)),
+      );
+    }
+    if (inner is List && inner.isNotEmpty && inner.first is Map) {
+      return Map<String, dynamic>.from(
+        (inner.first as Map).map((k, v) => MapEntry(k.toString(), v)),
+      );
+    }
+    return root;
   }
 
   static String _fmtMoney(num? n, String currency) {
@@ -114,6 +127,27 @@ class _SparePartProfileWidgetState extends State<SparePartProfileWidget>
     if (v == null) return 'Не указан';
     final s = v.toString().trim();
     return s.isEmpty ? 'Не указан' : s;
+  }
+
+  /// OEM / кросс-номера приходят массивом строк.
+  static String _listOrDash(dynamic v) {
+    if (v == null) return 'Не указан';
+    if (v is List) {
+      final parts = v
+          .map((e) => e?.toString().trim() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      return parts.isEmpty ? 'Не указан' : parts.join(', ');
+    }
+    return _strOrDash(v);
+  }
+
+  static Map<String, dynamic>? _specsMap(Map<String, dynamic> data) {
+    final s = data['specs'];
+    if (s is! Map) return null;
+    return Map<String, dynamic>.from(
+      s.map((k, v) => MapEntry(k.toString(), v)),
+    );
   }
 
   static String _descOrEmpty(dynamic v) {
@@ -218,9 +252,24 @@ class _SparePartProfileWidgetState extends State<SparePartProfileWidget>
                     actions: [
                       Padding(
                         padding: const EdgeInsets.only(right: 12),
-                          child: Center(
+                        child: Center(
                           child: PopupMenuButton<String>(
-                            onSelected: (_) {},
+                            onSelected: (value) async {
+                              if (value != 'edit') return;
+                              if (partId.isEmpty) return;
+                              final ok = await Navigator.of(context).push<bool>(
+                                MaterialPageRoute(
+                                  builder: (_) => SparePartCreateCardWidget(
+                                    nomenclatureId: partId,
+                                  ),
+                                ),
+                              );
+                              if (ok == true && context.mounted) {
+                                setState(() {
+                                  _loadFuture = _fetchPart();
+                                });
+                              }
+                            },
                             offset: const Offset(0, 44),
                             color: theme.secondaryBackground,
                             child: Container(
@@ -229,7 +278,10 @@ class _SparePartProfileWidgetState extends State<SparePartProfileWidget>
                                 vertical: 8,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF14181B),
+                                color: Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? theme.primary
+                                    : const Color(0xFF14181B),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
@@ -250,18 +302,41 @@ class _SparePartProfileWidgetState extends State<SparePartProfileWidget>
                                 ],
                               ),
                             ),
-                            itemBuilder: (ctx) => [
-                              PopupMenuItem(
-                                value: 'noop',
-                                enabled: false,
-                                child: Text(
-                                  'Нет доступных действий',
-                                  style: theme.bodySmall.copyWith(
-                                    color: theme.secondaryText,
+                            itemBuilder: (ctx) {
+                              if (partId.isEmpty) {
+                                return [
+                                  PopupMenuItem<String>(
+                                    value: 'noop',
+                                    enabled: false,
+                                    child: Text(
+                                      'Нет id для редактирования',
+                                      style: theme.bodySmall.copyWith(
+                                        color: theme.secondaryText,
+                                      ),
+                                    ),
+                                  ),
+                                ];
+                              }
+                              return [
+                                PopupMenuItem<String>(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.edit_outlined,
+                                        size: 20,
+                                        color: theme.primary,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        'Редактировать',
+                                        style: theme.bodyMedium,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ),
-                            ],
+                              ];
+                            },
                           ),
                         ),
                       ),
@@ -467,6 +542,7 @@ class _MainDataTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final success = theme.success;
+    final specs = _SparePartProfileWidgetState._specsMap(data);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -525,7 +601,9 @@ class _MainDataTab extends StatelessWidget {
                 _kv(
                   context,
                   'Кросс номера',
-                  _SparePartProfileWidgetState._strOrDash(data['cross_numbers']),
+                  _SparePartProfileWidgetState._listOrDash(
+                    data['cross_numbers'],
+                  ),
                   valueMuted: true,
                 ),
                 _kv(
@@ -533,39 +611,6 @@ class _MainDataTab extends StatelessWidget {
                   'Код ТНВЭД',
                   _SparePartProfileWidgetState._strOrDash(data['hs_code']),
                   valueMuted: true,
-                ),
-              ],
-            ),
-          );
-
-          final barcodes = _card(
-            context,
-            title: 'ШТРИХКОДЫ',
-            child: Column(
-              children: [
-                Icon(
-                  Icons.qr_code_2_outlined,
-                  size: 56,
-                  color: theme.secondaryText.withOpacity(0.4),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Штрихкоды не указаны',
-                  style: theme.bodyMedium.copyWith(color: theme.secondaryText),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: null,
-                    icon: Icon(Icons.print_outlined, color: theme.secondaryText),
-                    label: Text(
-                      'Печать этикеток',
-                      style: theme.bodyMedium.copyWith(
-                        color: theme.secondaryText,
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
@@ -580,13 +625,17 @@ class _MainDataTab extends StatelessWidget {
                 _sectionLine(
                   context,
                   'OEM НОМЕРА',
-                  'Не указаны',
+                  _SparePartProfileWidgetState._listOrDash(
+                    data['oem_numbers'],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _sectionLine(
                   context,
                   'КРОСС-НОМЕРА / АНАЛОГИ',
-                  'Не указаны',
+                  _SparePartProfileWidgetState._listOrDash(
+                    data['cross_numbers'],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _sectionLine(
@@ -607,26 +656,31 @@ class _MainDataTab extends StatelessWidget {
                 _kv(
                   context,
                   'Масса',
-                  _fmtCharField(data['mass'] ?? data['weight']),
+                  _fmtCharField(
+                    specs?['mass'] ?? data['mass'] ?? data['weight'],
+                  ),
                   valueMuted: true,
                 ),
                 _kv(
                   context,
                   'Материал',
-                  _fmtCharField(data['material']),
+                  _fmtCharField(specs?['material'] ?? data['material']),
                   valueMuted: true,
                 ),
                 _kv(
                   context,
                   'Давление',
-                  _fmtCharField(data['pressure']),
+                  _fmtCharField(specs?['pressure'] ?? data['pressure']),
                   valueMuted: true,
                 ),
                 _kv(
                   context,
                   'Расход',
                   _fmtCharField(
-                    data['flow'] ?? data['flow_rate'] ?? data['consumption'],
+                    specs?['flow'] ??
+                        data['flow'] ??
+                        data['flow_rate'] ??
+                        data['consumption'],
                   ),
                   valueMuted: true,
                 ),
@@ -653,8 +707,6 @@ class _MainDataTab extends StatelessWidget {
                   flex: 2,
                   child: Column(
                     children: [
-                      barcodes,
-                      const SizedBox(height: 12),
                       identification,
                     ],
                   ),
@@ -667,8 +719,6 @@ class _MainDataTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               mainDetails,
-              const SizedBox(height: 12),
-              barcodes,
               const SizedBox(height: 12),
               identification,
               const SizedBox(height: 12),

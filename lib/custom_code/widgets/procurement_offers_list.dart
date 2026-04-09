@@ -13,6 +13,28 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
+/// Ручное редактирование КП — только до этапа утверждения заказа (после сравнения предложений кнопку убираем).
+bool _procurementAllowsEditManualKp(String status) {
+  switch (status) {
+    case 'AWAITING_APPROVAL_COUNTERPARTY':
+    case 'CONFIRMED_KP':
+    case 'CONFIRMED_PARTIALLY_KP':
+    case 'AWAITING_PAYMENT':
+    case 'PAID':
+    case 'AWAITING_PAYMENT_VERIFICATION':
+    case 'AWAITING_SHIPMENT':
+    case 'CONFIRMED_PAYMENT':
+    case 'SENT':
+    case 'AWAITING_ORDER_CONFIRMATION':
+    case 'FINISHED':
+    case 'REJECTED_KP':
+    case 'DENIED':
+      return false;
+    default:
+      return true;
+  }
+}
+
 class ProcurementOffersList extends StatefulWidget {
   const ProcurementOffersList({
     Key? key,
@@ -162,12 +184,44 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
 
   // --- ЛОГИКА УТВЕРЖДЕНИЯ ---
 
+  Map<String, String> get _procurementHttpHeaders => {
+        'Authorization': widget.authToken,
+        'workspace': FFAppState().workspace,
+      };
+
+  Future<Map<String, List<dynamic>>> _fetchCompaniesAndWarehouses() async {
+    final ws = FFAppState().workspace.trim();
+    if (ws.isEmpty) {
+      throw Exception('Workspace не выбран');
+    }
+    final cUri = Uri.parse(
+        'https://fleet.equipmetry.kz/api/v1/workspace/companies?workspace_id=$ws');
+    final wUri =
+        Uri.parse('https://fleet.equipmetry.kz/api/v1/workspace/warehouse');
+    final cRes = await http.get(cUri, headers: _procurementHttpHeaders);
+    final wRes = await http.get(wUri, headers: _procurementHttpHeaders);
+    if (cRes.statusCode != 200) {
+      throw Exception('Компании: HTTP ${cRes.statusCode}');
+    }
+    if (wRes.statusCode != 200) {
+      throw Exception('Склады: HTTP ${wRes.statusCode}');
+    }
+    final cDecoded = jsonDecode(utf8.decode(cRes.bodyBytes));
+    final wDecoded = jsonDecode(utf8.decode(wRes.bodyBytes));
+    final companies = cDecoded is List ? cDecoded : <dynamic>[];
+    final warehouses = wDecoded is List ? wDecoded : <dynamic>[];
+    return {'companies': companies, 'warehouses': warehouses};
+  }
+
   Future<void> _showConfirmDialog(List<Map<String, String>> confirmedOffers, String counterpartyId, bool isInternal) async {
     final TextEditingController commentController = TextEditingController();
     final TextEditingController titleController = TextEditingController();
     String? invoiceUrl;
     DateTime? invoiceDate;
     bool isUploadingInvoice = false;
+    String? selectedCompanyId;
+    String? selectedWarehouseId;
+    final refsFuture = _fetchCompaniesAndWarehouses();
 
     await showModalBottomSheet(
       context: context,
@@ -202,7 +256,103 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
                   ),
                   Text("Утверждение заказа",
                       style: FlutterFlowTheme.of(context).headlineSmall),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
+                  FutureBuilder<Map<String, List<dynamic>>>(
+                    future: refsFuture,
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                              child: SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2))),
+                        );
+                      }
+                      if (snap.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            'Не удалось загрузить компании и склады: ${snap.error}',
+                            style: TextStyle(
+                                color: Colors.red.shade700, fontSize: 13),
+                          ),
+                        );
+                      }
+                      final companies = snap.data!['companies'] ?? <dynamic>[];
+                      final warehouses =
+                          snap.data!['warehouses'] ?? <dynamic>[];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("Компания",
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedCompanyId,
+                            decoration: InputDecoration(
+                              hintText: "Выберите компанию",
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                            ),
+                            items: [
+                              for (final c in companies)
+                                if (c is Map &&
+                                    c['id'] != null &&
+                                    c['id'].toString().isNotEmpty)
+                                  DropdownMenuItem<String>(
+                                    value: c['id'].toString(),
+                                    child: Text(
+                                      c['name']?.toString() ?? '—',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                            ],
+                            onChanged: (v) =>
+                                setStateSheet(() => selectedCompanyId = v),
+                          ),
+                          const SizedBox(height: 16),
+                          Text("Склад назначения",
+                              style: FlutterFlowTheme.of(context)
+                                  .bodyMedium
+                                  .copyWith(fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: selectedWarehouseId,
+                            decoration: InputDecoration(
+                              hintText: "Выберите склад",
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                            ),
+                            items: [
+                              for (final w in warehouses)
+                                if (w is Map &&
+                                    w['id'] != null &&
+                                    w['id'].toString().isNotEmpty)
+                                  DropdownMenuItem<String>(
+                                    value: w['id'].toString(),
+                                    child: Text(
+                                      w['name']?.toString() ?? '—',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                            ],
+                            onChanged: (v) =>
+                                setStateSheet(() => selectedWarehouseId = v),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      );
+                    },
+                  ),
 
                   // Счёт на оплату (загрузка файла)
                   Text("Счёт на оплату",
@@ -338,6 +488,16 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
                           onPressed: isUploadingInvoice
                               ? null
                               : () async {
+                                  if (selectedCompanyId == null ||
+                                      selectedWarehouseId == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Выберите компанию и склад назначения'),
+                                      ),
+                                    );
+                                    return;
+                                  }
                                   Navigator.pop(context);
                                   await _sendConfirmationApi(
                                     confirmedOffers,
@@ -346,6 +506,8 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
                                     counterpartyId,
                                     invoiceTitle: titleController.text,
                                     invoiceDate: invoiceDate,
+                                    companyId: selectedCompanyId!,
+                                    warehouseId: selectedWarehouseId!,
                                   );
                                 },
                           style: ElevatedButton.styleFrom(
@@ -374,6 +536,8 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
     String cpId, {
     String? invoiceTitle,
     DateTime? invoiceDate,
+    required String companyId,
+    required String warehouseId,
   }) async {
     setState(() => _isProcessing = true);
     final url =
@@ -382,13 +546,15 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
         ? "${invoiceDate.year}-${invoiceDate.month.toString().padLeft(2, '0')}-${invoiceDate.day.toString().padLeft(2, '0')}"
         : null;
     final body = jsonEncode({
-      "offers_confirmed": offers, 
-      "comment": comment.isEmpty ? null : comment, 
+      "offers_confirmed": offers,
+      "comment": comment.isEmpty ? null : comment,
       "invoice_for_payment": invoiceUrl,
       "counterparty_id": cpId,
       "price_new": null,
       "invoice_title": (invoiceTitle?.isEmpty ?? true) ? null : invoiceTitle,
       "invoice_date": invoiceDateStr,
+      "company_id": companyId,
+      "warehouse_id": warehouseId,
     });
 
     try {
@@ -561,6 +727,13 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
     final rootOffers = (widget.sentCounterpartyOffers ?? []).where((o) => o['status'] != 'REJECTED').toList();
     final allItems = widget.sentInventoryItems ?? [];
     final isSupplier = FFAppState().STO == "Поставщик";
+    final currentUserEmail = (getJsonField(
+          FFAppState().result,
+          r'''$.user.email''',
+        )?.toString() ??
+            '')
+        .trim()
+        .toLowerCase();
 
     final filteredOffers = isSupplier
         ? rootOffers.where((offer) => offer['counterparty']?['id']?.toString() == widget.currentUserId).toList()
@@ -571,7 +744,7 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
     return Stack(
       children: [
         ListView.builder(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 150),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 250),
           itemCount: filteredOffers.length,
           itemBuilder: (context, index) {
             final deliveryOffer = filteredOffers[index];
@@ -579,6 +752,8 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
             final counterparty = deliveryOffer['counterparty'] ?? {};
             final supplierId = counterparty['id'];
             final supplierTitle = counterparty['title'] ?? 'Неизвестный поставщик';
+            final supplierEmail =
+                (counterparty['email']?.toString() ?? '').trim().toLowerCase();
             final bool isInternal = deliveryOffer['counterparty_type'] == 'INTERNAL';
 
             bool hasGrn = deliveryOffer['goods_receipt_note'] != null && deliveryOffer['goods_receipt_note'].toString().isNotEmpty;
@@ -619,7 +794,9 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
               }
             }
 
+            bool usedEmptyPlaceholder = false;
             if (supplierGoods.isEmpty && allItems.isNotEmpty) {
+              usedEmptyPlaceholder = true;
               supplierGoods = allItems
                   .map((item) => {
                         'inventory_item': item,
@@ -634,6 +811,20 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
             }
 
             if (supplierGoods.isEmpty) return const SizedBox();
+
+            final bool isOwnOffer =
+                supplierId?.toString() == widget.currentUserId ||
+                    (currentUserEmail.isNotEmpty &&
+                        supplierEmail == currentUserEmail);
+            final bool showEditKp = isOwnOffer ||
+                (!isSupplier &&
+                    (isInternal ||
+                        usedEmptyPlaceholder ||
+                        deliveryOffer['is_manual'] == true ||
+                        deliveryOffer['manual_kp'] == true ||
+                        deliveryOffer['manual_kp_entry'] == true ||
+                        deliveryOffer['counterparty_type']?.toString().toUpperCase() ==
+                            'MANUAL'));
             double grandTotal = goodsTotalCost + (deliveryOffer['price'] ?? 0).toDouble();
 
             // --- УСЛОВИЯ ВИДИМОСТИ КНОПОК ---
@@ -675,7 +866,14 @@ class _ProcurementOffersListState extends State<ProcurementOffersList> {
                                       spacing: 8, runSpacing: 8,
                                       children: [
                                         _smallActionBtn('Документы', Icons.folder_open, () => _showDocumentsBottomSheet(deliveryOffer)),
-                                        if (!isSupplier && isInternal) _smallActionBtn('Редактировать КП', Icons.edit, () => _openEditKP(deliveryOffer), color: const Color(0xFF6C63FF)),
+                                        if (showEditKp &&
+                                            _procurementAllowsEditManualKp(
+                                                widget.procurementStatus))
+                                          _smallActionBtn(
+                                              'Редактировать КП',
+                                              Icons.edit,
+                                              () => _openEditKP(deliveryOffer),
+                                              color: const Color(0xFF6C63FF)),
                                         if (showPaymentBtn) _smallActionBtn('Загрузить платежку', Icons.payment, () => _pickAndUploadPaymentProof(offerId), color: const Color(0xFF4B39EF)),
                                         if (showPaymentConfirmBtn) _smallActionBtn('Подтвердить оплату', Icons.check_circle_outline, () => _confirmPayment(supplierId.toString()), color: const Color(0xFF22C55E)),
                                         if (showGenerateDocs) ...[

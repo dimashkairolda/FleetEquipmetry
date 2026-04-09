@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/form_field_controller.dart';
 import 'dart:ui';
@@ -125,18 +126,20 @@ class _ExpenseJournalWidgetState extends State<ExpenseJournalWidget> {
             appBar: AppBar(
               backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
               automaticallyImplyLeading: false,
-              leading: FlutterFlowIconButton(
-                borderRadius: 30,
-                buttonSize: 60,
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  size: 30,
-                ),
-                onPressed: () async {
-                  context.pushNamed(ProfilePageWidget.routeName);
-                },
-              ),
+              leading: BottomNavPrimaryTabScope.isPrimaryTabOf(context)
+                  ? null
+                  : FlutterFlowIconButton(
+                      borderRadius: 30,
+                      buttonSize: 60,
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        color: FlutterFlowTheme.of(context).primaryText,
+                        size: 30,
+                      ),
+                      onPressed: () async {
+                        context.pushNamed(ProfilePageWidget.routeName);
+                      },
+                    ),
               title: Text(
                 'Журнал расходов',
                 style: FlutterFlowTheme.of(context).bodyMedium.override(

@@ -284,3 +284,108 @@ class SparePartsWarehouseModel extends ChangeNotifier {
 
   void disposeModel() {}
 }
+
+/// Результат проверки штрихкода перед добавлением запчасти.
+class PartBarcodeLookupResult {
+  const PartBarcodeLookupResult._({
+    required this.ok,
+    this.errorMessage,
+    this.items = const [],
+    this.totalCount,
+  });
+
+  factory PartBarcodeLookupResult.success(
+    List<Map<String, dynamic>> items,
+    int? totalCount,
+  ) =>
+      PartBarcodeLookupResult._(
+        ok: true,
+        items: items,
+        totalCount: totalCount,
+      );
+
+  factory PartBarcodeLookupResult.error(String message) =>
+      PartBarcodeLookupResult._(ok: false, errorMessage: message);
+
+  final bool ok;
+  final String? errorMessage;
+  final List<Map<String, dynamic>> items;
+  final int? totalCount;
+}
+
+/// GET …/part-nomenclature?page=1&limit=10&in_stock=true&barcode=…
+Future<PartBarcodeLookupResult> lookupPartNomenclatureByBarcode(
+  String barcode,
+) async {
+  final trimmed = barcode.trim();
+  if (trimmed.isEmpty) {
+    return PartBarcodeLookupResult.error('Пустой штрихкод');
+  }
+
+  final workspaceId = FFAppState().workspace.trim();
+  final token = currentAuthenticationToken;
+  if (workspaceId.isEmpty || token == null || token.isEmpty) {
+    return PartBarcodeLookupResult.error('Нет workspace или токена');
+  }
+
+  final uri = Uri.parse('$_fleetBase/part-nomenclature').replace(
+    queryParameters: <String, String>{
+      'page': '1',
+      'limit': '10',
+      'in_stock': 'true',
+      'barcode': trimmed,
+    },
+  );
+
+  try {
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': token,
+        'Workspace': workspaceId,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      return PartBarcodeLookupResult.error(
+        'Ошибка сервера: HTTP ${response.statusCode}',
+      );
+    }
+
+    final decoded = json.decode(utf8.decode(response.bodyBytes));
+    if (decoded is! Map<String, dynamic>) {
+      return PartBarcodeLookupResult.error('Некорректный ответ API');
+    }
+
+    final raw = decoded['data'];
+    final items = <Map<String, dynamic>>[];
+    if (raw is List) {
+      for (final e in raw) {
+        if (e is Map) {
+          items.add(
+            Map<String, dynamic>.from(
+              e.map((k, v) => MapEntry(k.toString(), v)),
+            ),
+          );
+        }
+      }
+    }
+
+    int? totalCount;
+    final c = decoded['count'];
+    final t = decoded['total'];
+    if (c is int) {
+      totalCount = c;
+    } else if (c is num) {
+      totalCount = c.toInt();
+    } else if (t is int) {
+      totalCount = t;
+    } else if (t is num) {
+      totalCount = t.toInt();
+    }
+
+    return PartBarcodeLookupResult.success(items, totalCount);
+  } catch (e) {
+    return PartBarcodeLookupResult.error('$e');
+  }
+}

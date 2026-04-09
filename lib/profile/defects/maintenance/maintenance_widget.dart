@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/flutter_flow/form_field_controller.dart';
 import '/profile/defects/maintenance_dots/maintenance_dots_widget.dart';
@@ -120,20 +121,22 @@ class _MaintenanceWidgetState extends State<MaintenanceWidget> {
             appBar: AppBar(
               backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
               automaticallyImplyLeading: false,
-              leading: InkWell(
-                splashColor: Colors.transparent,
-                focusColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                onTap: () async {
-                  context.safePop();
-                },
-                child: Icon(
-                  Icons.chevron_left_sharp,
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  size: 24,
-                ),
-              ),
+              leading: BottomNavPrimaryTabScope.isPrimaryTabOf(context)
+                  ? null
+                  : InkWell(
+                      splashColor: Colors.transparent,
+                      focusColor: Colors.transparent,
+                      hoverColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                      onTap: () async {
+                        context.safePop();
+                      },
+                      child: Icon(
+                        Icons.chevron_left_sharp,
+                        color: FlutterFlowTheme.of(context).primaryText,
+                        size: 24,
+                      ),
+                    ),
               title: Text(
                 'График обслуживания',
                 style: FlutterFlowTheme.of(context).bodyMedium.override(

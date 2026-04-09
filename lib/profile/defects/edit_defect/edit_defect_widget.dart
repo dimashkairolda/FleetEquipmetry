@@ -421,6 +421,12 @@ class _EditDefectWidgetState extends State<EditDefectWidget>
                           color: FlutterFlowTheme.of(context).primaryBackground,
                         ),
                         child: SingleChildScrollView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.only(
+                            bottom: MediaQuery.viewInsetsOf(context).bottom +
+                                24.0,
+                          ),
                           child: Column(
                             mainAxisSize: MainAxisSize.max,
                             children: [
@@ -784,6 +790,10 @@ class _EditDefectWidgetState extends State<EditDefectWidget>
                                                         .opisanieFocusNode,
                                                     autofocus: true,
                                                     obscureText: false,
+                                                    keyboardType:
+                                                        TextInputType.multiline,
+                                                    minLines: 3,
+                                                    maxLines: 6,
                                                     decoration: InputDecoration(
                                                       labelStyle:
                                                           FlutterFlowTheme.of(

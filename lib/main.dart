@@ -16,6 +16,10 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'flutter_flow/internationalization.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:Equipmetry/approvement/approvement/approvement_widget.dart';
+import 'package:Equipmetry/procurement/procurement/procurement_widget.dart';
+import '/flutter_flow/bottom_nav_config.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import 'index.dart';
 
 void main() async {
@@ -160,37 +164,131 @@ class NavBarPage extends StatefulWidget {
 class _NavBarPageState extends State<NavBarPage> {
   String _currentPageName = 'Raport';
   late Widget? _currentPage;
+  late String _bottomNavSignature;
 
   @override
   void initState() {
     super.initState();
-    _currentPageName = widget.initialPage ?? _currentPageName;
+    _applyInitialTab();
     _currentPage = widget.page;
+    _bottomNavSignature = FFAppState().bottomNavModuleIds.join('|');
+    FFAppState().addListener(_onAppStateChanged);
+  }
+
+  void _applyInitialTab() {
+    final tabIds = FFAppState().bottomNavModuleIds;
+    final initial = widget.initialPage ?? 'Raport';
+    _currentPageName =
+        tabIds.contains(initial) ? initial : tabIds.first;
+  }
+
+  void _onAppStateChanged() {
+    if (!mounted) return;
+    final sig = FFAppState().bottomNavModuleIds.join('|');
+    if (sig == _bottomNavSignature) return;
+    _bottomNavSignature = sig;
+    final tabIds = FFAppState().bottomNavModuleIds;
+    if (!tabIds.contains(_currentPageName)) {
+      safeSetState(() {
+        _currentPageName = tabIds.isNotEmpty ? tabIds.first : 'Raport';
+        _currentPage = null;
+      });
+    } else {
+      safeSetState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    FFAppState().removeListener(_onAppStateChanged);
+    super.dispose();
+  }
+
+  Widget _bodyForTab(String id) {
+    switch (id) {
+      case 'Raport':
+        return const RaportWidget();
+      case 'Defects':
+        return const DefectsWidget();
+      case 'Reglaments':
+        return const ReglamentsWidget();
+      case 'Naryads':
+        return const NaryadsWidget();
+      case 'profilePage':
+        return const ProfilePageWidget();
+      case 'EquipmentsTree':
+        return const EquipmentsTreeWidget();
+      case 'Maintenance':
+        return const MaintenanceWidget();
+      case 'ExpenseJournal':
+        return const ExpenseJournalWidget();
+      case 'Project':
+        return const ProjectWidget();
+      case 'StoreHouse':
+        return const StoreHouseWidget();
+      case 'sparePartsWarehouse':
+        return const SparePartsWarehouseWidget();
+      case 'CTO':
+        return const CtoWidget();
+      case 'Procurement':
+        return const ProcurementWidget();
+      case 'Approvement':
+        return const ApprovementWidget();
+      default:
+        return const RaportWidget();
+    }
+  }
+
+  BottomNavigationBarItem _navItem(
+    BuildContext context,
+    BottomNavModuleMeta meta,
+  ) {
+    final icon = meta.useFaIcon
+        ? FaIcon(
+            meta.icon,
+            size: 22.0,
+          )
+        : Icon(
+            meta.icon,
+            size: 24.0,
+          );
+    return BottomNavigationBarItem(
+      icon: icon,
+      label: meta.label,
+      tooltip: '',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final tabs = {
-      'Raport': const RaportWidget(),
-      'Defects': const DefectsWidget(),
-      'Reglaments': const ReglamentsWidget(),
-      'Naryads': const NaryadsWidget(),
-      'profilePage': const ProfilePageWidget(),
-    };
-    final currentIndex = tabs.keys.toList().indexOf(_currentPageName);
+    final tabIds = FFAppState().bottomNavModuleIds;
+    final items = <BottomNavigationBarItem>[];
+    for (final id in tabIds) {
+      final meta = bottomNavMetaFor(id);
+      if (meta != null) {
+        items.add(_navItem(context, meta));
+      }
+    }
+    var currentIndex = tabIds.indexOf(_currentPageName);
+    if (currentIndex < 0) {
+      currentIndex = 0;
+    }
 
     return Scaffold(
       resizeToAvoidBottomInset: !widget.disableResizeToAvoidBottomInset,
-      body: _currentPage ?? tabs[_currentPageName],
+      body: BottomNavPrimaryTabScope(
+        isPrimaryTab: tabIds.contains(_currentPageName),
+        child: _currentPage ?? _bodyForTab(_currentPageName),
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (i) => safeSetState(() {
           _currentPage = null;
-          _currentPageName = tabs.keys.toList()[i];
+          _currentPageName = tabIds[i];
           MyApp.analytics.logEvent(
-    name: tabs.keys.toList()[i],
-  );
-  AppMetrica.reportEvent(tabs.keys.toList()[i]);
+            name: tabIds[i],
+          );
+          AppMetrica.reportEvent(tabIds[i]);
         }),
         backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
         selectedItemColor: FlutterFlowTheme.of(context).primary,
@@ -198,44 +296,7 @@ class _NavBarPageState extends State<NavBarPage> {
         showSelectedLabels: true,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.car_crash,
-            ),
-            label: 'Мониторинг',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.list_alt_outlined,
-            ),
-            label: 'Дефекты',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.build_rounded,
-            ),
-            label: 'Регламенты',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: FaIcon(
-              FontAwesomeIcons.ticketAlt,
-            ),
-            label: 'Наряды',
-            tooltip: '',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(
-              Icons.person,
-              size: 24.0,
-            ),
-            label: 'Профиль',
-            tooltip: '',
-          )
-        ],
+        items: items,
       ),
     );
   }

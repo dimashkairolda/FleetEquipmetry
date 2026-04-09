@@ -1,10 +1,12 @@
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'spare_parts_warehouse_model.dart';
+import 'spare_part_add_barcode_gate_widget.dart';
 import 'spare_part_create_card_widget.dart';
 export 'spare_parts_warehouse_model.dart';
 
@@ -271,7 +273,8 @@ class _SparePartsWarehouseWidgetState extends State<SparePartsWarehouseWidget> {
           backgroundColor: theme.secondaryBackground,
           foregroundColor: theme.primaryText,
           surfaceTintColor: Colors.transparent,
-          automaticallyImplyLeading: true,
+          automaticallyImplyLeading:
+              !BottomNavPrimaryTabScope.isPrimaryTabOf(context),
           iconTheme: IconThemeData(color: theme.primaryText),
           title: Text(
             'Склад запчастей',
@@ -292,11 +295,57 @@ class _SparePartsWarehouseWidgetState extends State<SparePartsWarehouseWidget> {
               icon: Icon(Icons.add_rounded, color: theme.primary),
               tooltip: 'Добавить запчасть',
               onPressed: () async {
-                final created = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(
-                    builder: (_) => const SparePartCreateCardWidget(),
+                final choice = await showModalBottomSheet<String>(
+                  context: context,
+                  backgroundColor: theme.secondaryBackground,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  builder: (ctx) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: Icon(Icons.qr_code_scanner_rounded,
+                              color: theme.primary),
+                          title: const Text('Сканировать запчасть'),
+                          subtitle: const Text(
+                            'Штрихкод и проверка в номенклатуре',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          onTap: () => Navigator.pop(ctx, 'scan'),
+                        ),
+                        ListTile(
+                          leading:
+                              Icon(Icons.edit_note_rounded, color: theme.primary),
+                          title: const Text('Добавить запчасть'),
+                          subtitle: const Text(
+                            'Новая карточка без сканирования',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          onTap: () => Navigator.pop(ctx, 'manual'),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
                   ),
                 );
+                if (!mounted || choice == null) return;
+                bool? created;
+                if (choice == 'scan') {
+                  created = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const SparePartAddBarcodeGateWidget(),
+                    ),
+                  );
+                } else {
+                  created = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => const SparePartCreateCardWidget(),
+                    ),
+                  );
+                }
                 if (created == true && mounted) {
                   await _model.fetchParts();
                 }

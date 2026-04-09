@@ -30,6 +30,7 @@ import '/main.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 import '/index.dart';
+import '/profile/bottom_nav_settings/bottom_nav_settings_widget.dart';
 
 export 'package:go_router/go_router.dart';
 export 'serialization_util.dart';
@@ -176,7 +177,10 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           path: CreateProcurementWidget.routePath,
           requireAuth: true,
           builder: (context, params) => CreateProcurementWidget(
-           
+            initialTitle: params.getParam(
+              'initialTitle',
+              ParamType.String,
+            ),
           ),
         ),
         
@@ -195,6 +199,12 @@ GoRouter createRouter(AppStateNotifier appStateNotifier) => GoRouter(
           builder: (context, params) => params.isEmpty
               ? NavBarPage(initialPage: 'profilePage')
               : ProfilePageWidget(),
+        ),
+        FFRoute(
+          name: 'BottomNavSettings',
+          path: BottomNavSettingsWidget.routePath,
+          requireAuth: true,
+          builder: (context, params) => const BottomNavSettingsWidget(),
         ),
         FFRoute(
           name: EquipmentsTreeWidget.routeName,

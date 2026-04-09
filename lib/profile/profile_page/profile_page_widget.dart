@@ -1,6 +1,3 @@
-import 'package:Equipmetry/approvement/approvement/approvement_widget.dart';
-import 'package:Equipmetry/procurement/procurement/procurement_widget.dart';
-
 import '/auth/custom_auth/auth_util.dart';
 import '/backend/api_requests/api_calls.dart';
 import '/flutter_flow/flutter_flow_animations.dart';
@@ -8,11 +5,13 @@ import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/profile/settings/settings_widget.dart';
-import '/store_house/spare_parts_warehouse/spare_parts_warehouse_widget.dart';
 import 'dart:ui';
+import '/flutter_flow/bottom_nav_config.dart';
+import '/flutter_flow/bottom_nav_navigation.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
@@ -347,8 +346,8 @@ class _ProfilePageWidgetState extends State<ProfilePageWidget>
                         },
                         child: Padding(
                           padding: MediaQuery.viewInsetsOf(context),
-                          child: Container(
-                            height: MediaQuery.sizeOf(context).height * 0.11,
+                          child: SafeArea(
+                            top: false,
                             child: SettingsWidget(),
                           ),
                         ),
@@ -413,610 +412,138 @@ class _ProfilePageWidgetState extends State<ProfilePageWidget>
                   color: FlutterFlowTheme.of(context).alternate,
                 ).animateOnPageLoad(
                     animationsMap['dividerOnPageLoadAnimation']!),
-                Padding(
-                  padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                  child: InkWell(
-                    splashColor: Colors.transparent,
-                    focusColor: Colors.transparent,
-                    hoverColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                    onTap: () async {
-                      context.pushNamed(EquipmentsTreeWidget.routeName);
+                Consumer<FFAppState>(
+                  builder: (context, _, __) {
+                    final onBar =
+                        FFAppState().bottomNavModuleIds.toSet();
+                    final shortcuts = kAllBottomNavModules
+                        .where((m) {
+                          if (m.id == kProfileBottomNavModuleId) {
+                            return false;
+                          }
+                          if (onBar.contains(m.id)) return false;
+                          if (m.aclPath != null &&
+                              functions
+                                      .getAclValue(
+                                        FFAppState().result,
+                                        m.aclPath!,
+                                      )
+                                      .toString() ==
+                                  '111') {
+                            return false;
+                          }
+                          return true;
+                        })
+                        .toList();
 
-                      FFAppState().searchOutput = [];
-                      FFAppState().isShowFullList = true;
-                      safeSetState(() {});
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      height: MediaQuery.sizeOf(context).height * 0.08,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).secondaryBackground,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          width: 2,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Padding(
-                              padding:
-                                  EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                              child: Icon(
-                                Icons.account_circle_outlined,
-                                color: FlutterFlowTheme.of(context).primaryText,
-                                size: 24,
-                              ),
-                            ),
-                            Padding(
-                              padding:
-                                  EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ...shortcuts.asMap().entries.map((entry) {
+                          final meta = entry.value;
+                          final animKey = (entry.key % 8) + 1;
+                          final anim = animationsMap[
+                              'containerOnPageLoadAnimation$animKey']!;
+                          return Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                21, 0, 21, 12),
+                            child: InkWell(
+                              splashColor: Colors.transparent,
+                              focusColor: Colors.transparent,
+                              hoverColor: Colors.transparent,
+                              highlightColor: Colors.transparent,
+                              onTap: () async {
+                                await navigateToBottomNavModule(
+                                  context,
+                                  meta.id,
+                                );
+                                safeSetState(() {});
+                              },
                               child: Container(
-                                width: MediaQuery.sizeOf(context).width * 0.7,
-                                decoration: BoxDecoration(),
-                                child: Text(
-                                  'Парк оборудования',
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium
-                                      .override(
-                                        fontFamily: 'SFProText',
-                                        fontSize: 13,
-                                        letterSpacing: 0.0,
+                                width: double.infinity,
+                                height:
+                                    MediaQuery.sizeOf(context).height * 0.08,
+                                decoration: BoxDecoration(
+                                  color: FlutterFlowTheme.of(context)
+                                      .secondaryBackground,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: FlutterFlowTheme.of(context)
+                                        .secondaryBackground,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsetsDirectional.fromSTEB(
+                                      8, 12, 8, 12),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.max,
+                                    children: [
+                                      Padding(
+                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                            8, 0, 0, 0),
+                                        child: meta.useFaIcon
+                                            ? FaIcon(
+                                                meta.icon,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primaryText,
+                                                size: 24,
+                                              )
+                                            : Icon(
+                                                meta.icon,
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .primaryText,
+                                                size: 24,
+                                              ),
                                       ),
+                                      Padding(
+                                        padding: EdgeInsetsDirectional.fromSTEB(
+                                            12, 0, 0, 0),
+                                        child: Container(
+                                          width: MediaQuery.sizeOf(context)
+                                                  .width *
+                                              0.7,
+                                          decoration: BoxDecoration(),
+                                          child: Text(
+                                            meta.label,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .override(
+                                                  fontFamily: 'SFProText',
+                                                  fontSize: 13,
+                                                  letterSpacing: 0.0,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ).animateOnPageLoad(
-                      animationsMap['containerOnPageLoadAnimation1']!),
+                          ).animateOnPageLoad(anim);
+                        }),
+                        if (shortcuts.isEmpty)
+                          Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                                24, 8, 24, 12),
+                            child: Text(
+                              'Все разделы вынесены на нижнюю панель',
+                              textAlign: TextAlign.center,
+                              style: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .override(
+                                    fontFamily: 'SFProText',
+                                    fontSize: 13,
+                                  ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/service/maintenances/pre/preview')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(MaintenanceWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.timer_outlined,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'График обслуживания',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation2']!),
-                  ),
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/service/maintenances/pre/preview')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(ExpenseJournalWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.moving,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Журнал расходов',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation3']!),
-                  ),
-                if (functions
-                        .getAclValue(
-                            FFAppState().result, '/api/v1/workspace/projects')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(ProjectWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.article,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Проектные заявки',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation4']!),
-                  ),
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/storehouse/orders/preview')
-                        .toString() !=
-                    '111') ...[
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(StoreHouseWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.toc_sharp,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Ремонтное обеспечение',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation5']!),
-                  ),
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(SparePartsWarehouseWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.build_circle_outlined,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Склад запчастей',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation8']!),
-                  ),
-                ],
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/application/preview')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(CtoWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.settings_sharp,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'СТО',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation6']!),
-                  ),
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/procurement/preview')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(ProcurementWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.manage_search,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Доска объявлений',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ).animateOnPageLoad(
-                        animationsMap['containerOnPageLoadAnimation7']!),
-                  ),
-                if (functions
-                        .getAclValue(FFAppState().result,
-                            '/api/v1/workspace/approval/preview')
-                        .toString() !=
-                    '111')
-                  Padding(
-                    padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),
-                    child: InkWell(
-                      splashColor: Colors.transparent,
-                      focusColor: Colors.transparent,
-                      hoverColor: Colors.transparent,
-                      highlightColor: Colors.transparent,
-                      onTap: () async {
-                        context.pushNamed(ApprovementWidget.routeName);
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        height: MediaQuery.sizeOf(context).height * 0.08,
-                        decoration: BoxDecoration(
-                          color:
-                              FlutterFlowTheme.of(context).secondaryBackground,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: FlutterFlowTheme.of(context)
-                                .secondaryBackground,
-                            width: 2,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: EdgeInsetsDirectional.fromSTEB(8, 12, 8, 12),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.max,
-                            children: [
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(8, 0, 0, 0),
-                                child: Icon(
-                                  Icons.checklist_rounded,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                  size: 24,
-                                ),
-                              ),
-                              Padding(
-                                padding:
-                                    EdgeInsetsDirectional.fromSTEB(12, 0, 0, 0),
-                                child: Container(
-                                  width: MediaQuery.sizeOf(context).width * 0.7,
-                                  decoration: BoxDecoration(),
-                                  child: Text(
-                                    'Согласование',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          fontFamily: 'SFProText',
-                                          fontSize: 13,
-                                          letterSpacing: 0.0,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
                   // Generated code for this Container Widget...
 // Padding(
 //   padding: EdgeInsetsDirectional.fromSTEB(21, 0, 21, 12),

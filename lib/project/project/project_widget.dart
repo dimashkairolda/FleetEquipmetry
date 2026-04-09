@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/flutter_flow/bottom_nav_primary_tab_scope.dart';
 import '/flutter_flow/form_field_controller.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
@@ -107,18 +108,20 @@ class _ProjectWidgetState extends State<ProjectWidget> {
             appBar: AppBar(
               backgroundColor: FlutterFlowTheme.of(context).secondaryBackground,
               automaticallyImplyLeading: false,
-              leading: FlutterFlowIconButton(
-                borderRadius: 30.0,
-                buttonSize: 60.0,
-                icon: Icon(
-                  Icons.arrow_back_rounded,
-                  color: FlutterFlowTheme.of(context).primaryText,
-                  size: 30.0,
-                ),
-                onPressed: () async {
-                  context.pushNamed(ProfilePageWidget.routeName);
-                },
-              ),
+              leading: BottomNavPrimaryTabScope.isPrimaryTabOf(context)
+                  ? null
+                  : FlutterFlowIconButton(
+                      borderRadius: 30.0,
+                      buttonSize: 60.0,
+                      icon: Icon(
+                        Icons.arrow_back_rounded,
+                        color: FlutterFlowTheme.of(context).primaryText,
+                        size: 30.0,
+                      ),
+                      onPressed: () async {
+                        context.pushNamed(ProfilePageWidget.routeName);
+                      },
+                    ),
               title: Text(
                 'Проектные заявки',
                 style: FlutterFlowTheme.of(context).bodyMedium.override(

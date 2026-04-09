@@ -26,7 +26,13 @@ import 'create_procurement_model.dart';
 export 'create_procurement_model.dart';
 
 class CreateProcurementWidget extends StatefulWidget {
-  const CreateProcurementWidget({super.key});
+  const CreateProcurementWidget({
+    super.key,
+    this.initialTitle,
+  });
+
+  /// Предзаполнение названия заявки (например, из названия дефекта).
+  final String? initialTitle;
 
   static String routeName = 'CreateProcurement';
   static String routePath = '/createProcurement';
@@ -77,9 +83,14 @@ class _CreateProcurementWidgetState extends State<CreateProcurementWidget>
   }
 
   Future<void> _sendPublicationApproval(String procurementId) async {
-    final List<String> chosenApprovers = _model.approverIds.isNotEmpty
-        ? _model.approverIds
-        : [getJsonField(FFAppState().result, r'''$.user.id''').toString()];
+    final List<String> chosenApprovers = _model.approverIds
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
+    if (chosenApprovers.isEmpty) {
+      return;
+    }
 
     final List<ApproverIdsStruct> approverStructs =
         chosenApprovers.asMap().entries.map((e) {
@@ -137,6 +148,12 @@ class _CreateProcurementWidgetState extends State<CreateProcurementWidget>
 
     _model.nazvanieTextController ??= TextEditingController();
     _model.nazvanieFocusNode ??= FocusNode();
+    final presetTitle = widget.initialTitle?.trim();
+    if (presetTitle != null &&
+        presetTitle.isNotEmpty &&
+        _model.nazvanieTextController.text.trim().isEmpty) {
+      _model.nazvanieTextController.text = presetTitle;
+    }
 
     _model.addressTextController ??= TextEditingController();
     _model.addressFocusNode ??= FocusNode();
@@ -206,12 +223,10 @@ class _CreateProcurementWidgetState extends State<CreateProcurementWidget>
             onPressed: () async {
               if (Navigator.of(context).canPop()) {
                 context.pop();
+              } else {
+                context.goNamed(ProcurementWidget.routeName);
               }
-              context.pushNamed(ProcurementWidget.routeName);
-
-              
               FFAppState().CTOInventoryItems = [];
-              
               safeSetState(() {});
             },
           ),
@@ -234,6 +249,25 @@ FFButtonWidget(
         SnackBar(
           content: Text(
             'Выберите закупщика для выбранного типа процесса',
+            style: TextStyle(
+              color: FlutterFlowTheme.of(context).primaryText,
+            ),
+          ),
+          duration: Duration(milliseconds: 3000),
+          backgroundColor: FlutterFlowTheme.of(context).secondary,
+        ),
+      );
+      return;
+    }
+    if (_flowConfig.requiresPublicationApproval &&
+        _model.approverIds
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Выберите хотя бы одного согласованта',
             style: TextStyle(
               color: FlutterFlowTheme.of(context).primaryText,
             ),
@@ -1205,13 +1239,15 @@ FFButtonWidget(
                                                             usersBody is List
                                                                 ? usersBody
                                                                 : [];
+                                                        _model.approverIdsController ??=
+                                                            FormListFieldController<String>(
+                                                          _model.approverIds.isEmpty
+                                                              ? null
+                                                              : _model.approverIds,
+                                                        );
                                                         return FlutterFlowDropDown<String>(
                                                           multiSelectController:
-                                                              FormListFieldController<String>(
-                                                                  _model.approverIds.isEmpty
-                                                                      ? null
-                                                                      : _model
-                                                                          .approverIds),
+                                                              _model.approverIdsController,
                                                           options: usersList
                                                               .map((u) =>
                                                                   u['id']
@@ -1228,8 +1264,8 @@ FFButtonWidget(
                                                             return '$first $last'
                                                                 .trim();
                                                           }).toList(),
-                                                          width: 476,
-                                                          height: 50,
+                                                          width: double.infinity,
+                                                          height: 46,
                                                           textStyle:
                                                               FlutterFlowTheme.of(
                                                                       context)
@@ -1278,9 +1314,15 @@ FFButtonWidget(
                                                           onMultiSelectChanged:
                                                               (val) =>
                                                                   safeSetState(
-                                                                    () => _model
-                                                                            .approverIds =
-                                                                        val ?? [],
+                                                                    () {
+                                                                      _model.approverIds =
+                                                                          val ?? [];
+                                                                      _model
+                                                                              .approverIdsController
+                                                                              ?.value =
+                                                                          _model
+                                                                              .approverIds;
+                                                                    },
                                                                   ),
                                                         );
                                                       },

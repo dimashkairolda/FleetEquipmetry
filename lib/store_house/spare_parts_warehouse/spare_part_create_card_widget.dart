@@ -19,14 +19,105 @@ const Color _kFieldBorder = Color(0xFFE0E4EB);
 const Color _kGreenState = Color(0xFF00C37B);
 const double _kRadius = 14.0;
 
+/// Цвета экрана создания/редактирования: светлая и тёмная тема.
+class _SpareCreatePalette {
+  _SpareCreatePalette._({
+    required this.screenBg,
+    required this.locTint,
+    required this.locBorder,
+    required this.fieldBorder,
+    required this.surface,
+    required this.tabBarBg,
+    required this.tabIndicator,
+    required this.cardShadowA,
+    required this.navCardShadowA,
+    required this.unselectedChipBg,
+    required this.bottomBarDividerA,
+  });
+
+  factory _SpareCreatePalette.of(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (isDark) {
+      return _SpareCreatePalette._(
+        screenBg: const Color(0xFF0E1114),
+        locTint: const Color(0xFF152A38),
+        locBorder: const Color(0xFF2D6A94),
+        fieldBorder: const Color(0xFF3D4450),
+        surface: const Color(0xFF1A1F26),
+        tabBarBg: const Color(0xFF13161A),
+        tabIndicator: const Color(0xFF242B35),
+        cardShadowA: 0.4,
+        navCardShadowA: 0.25,
+        unselectedChipBg: const Color(0xFF1A1F26),
+        bottomBarDividerA: 0.35,
+      );
+    }
+    return _SpareCreatePalette._(
+      screenBg: _kScreenBg,
+      locTint: _kLocTint,
+      locBorder: _kLocBorder,
+      fieldBorder: _kFieldBorder,
+      surface: Colors.white,
+      tabBarBg: const Color(0xFFEDEEF2),
+      tabIndicator: Colors.white,
+      cardShadowA: 0.05,
+      navCardShadowA: 0.04,
+      unselectedChipBg: Colors.white,
+      bottomBarDividerA: 0.6,
+    );
+  }
+
+  final Color screenBg;
+  final Color locTint;
+  final Color locBorder;
+  final Color fieldBorder;
+  final Color surface;
+  final Color tabBarBg;
+  final Color tabIndicator;
+  final double cardShadowA;
+  final double navCardShadowA;
+  final Color unselectedChipBg;
+  final double bottomBarDividerA;
+}
+
 class _NamedId {
   const _NamedId(this.id, this.name);
   final String id;
   final String name;
 }
 
+/// Одна строка: поставщик, кол-во, ед. изм., цена закупа и продажи.
+class _PurchaseLineRow {
+  _PurchaseLineRow()
+      : quantityCtrl = TextEditingController(text: '1'),
+        purchasePriceCtrl = TextEditingController(),
+        salePriceCtrl = TextEditingController();
+
+  Map<String, dynamic>? providerSnapshot;
+  String unitTitle = 'шт';
+  final TextEditingController quantityCtrl;
+  final TextEditingController purchasePriceCtrl;
+  final TextEditingController salePriceCtrl;
+
+  void dispose() {
+    quantityCtrl.dispose();
+    purchasePriceCtrl.dispose();
+    salePriceCtrl.dispose();
+  }
+}
+
 class SparePartCreateCardWidget extends StatefulWidget {
-  const SparePartCreateCardWidget({super.key});
+  const SparePartCreateCardWidget({
+    super.key,
+    this.nomenclatureId,
+    this.initialBarcode,
+  });
+
+  /// Если задан — режим редактирования (GET + PUT …/part-nomenclature/{id}).
+  final String? nomenclatureId;
+
+  /// Предзаполнение поля «Штрихкод товара» при создании (например после сканирования в шлюзе).
+  final String? initialBarcode;
 
   @override
   State<SparePartCreateCardWidget> createState() =>
@@ -54,6 +145,12 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   bool _loadingRefs = false;
   String? _refsError;
 
+  final List<_PurchaseLineRow> _purchaseLines = [];
+  final List<_NamedId> _uomItems = [];
+  final List<Map<String, dynamic>> _counterpartyPreview = [];
+  bool _loadingPurchaseRefs = false;
+  String? _purchaseRefsError;
+
   final _qtyCtrl = TextEditingController(text: '1');
   final _unitCtrl = TextEditingController(text: 'шт');
   final _noteCtrl = TextEditingController();
@@ -78,21 +175,46 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
 
   bool _uploading = false;
   bool _saving = false;
+  bool _loadingExistingPart = false;
+  /// Цена с сервера — уходит в PUT при редактировании (в форме поля нет).
+  num? _editPrice;
+
+  bool get _isEdit {
+    final id = widget.nomenclatureId?.trim();
+    return id != null && id.isNotEmpty;
+  }
 
   @override
   void initState() {
     super.initState();
+    if (!_isEdit) {
+      final b = widget.initialBarcode?.trim();
+      if (b != null && b.isNotEmpty) {
+        _barcodeCtrl.text = b;
+      }
+    }
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCategoriesAndWarehouses();
+    _purchaseLines.add(_PurchaseLineRow());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.wait([
+        _loadCategoriesAndWarehouses(),
+        _loadPurchaseRefs(),
+      ]);
+      if (mounted && _isEdit) {
+        await _loadExistingPartForEdit();
+      }
     });
   }
 
   @override
   void dispose() {
+    for (final r in _purchaseLines) {
+      r.dispose();
+    }
+    _purchaseLines.clear();
     _tabController.dispose();
     _rowCtrl.dispose();
     _shelfCtrl.dispose();
@@ -152,6 +274,181 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
       'Authorization': token,
       'Workspace': workspaceId,
     };
+  }
+
+  List<String> _stringListFromField(dynamic v) {
+    if (v == null) return [];
+    if (v is List) {
+      return v.map((e) => e?.toString().trim() ?? '').where((s) => s.isNotEmpty).toList();
+    }
+    final s = v.toString().trim();
+    if (s.isEmpty) return [];
+    return s.split(RegExp(r'[,;\n]+')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+  }
+
+  Future<void> _loadExistingPartForEdit() async {
+    final id = widget.nomenclatureId!.trim();
+    final workspaceId = FFAppState().workspace.trim();
+    final token = currentAuthenticationToken;
+    if (workspaceId.isEmpty || token == null || token.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Нет workspace или токена.')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _loadingExistingPart = true);
+    try {
+      final uri = Uri.parse('$_fleetBase/part-nomenclature/$id');
+      final response = await http.get(
+        uri,
+        headers: _fleetHeaders(workspaceId, token),
+      );
+      if (response.statusCode != 200) {
+        throw Exception('HTTP ${response.statusCode}: ${utf8.decode(response.bodyBytes)}');
+      }
+      final decoded = json.decode(utf8.decode(response.bodyBytes));
+      Map<String, dynamic>? d;
+      if (decoded is Map) {
+        final inner = decoded['data'];
+        if (inner is Map) {
+          d = Map<String, dynamic>.from(
+            inner.map((k, v) => MapEntry(k.toString(), v)),
+          );
+        } else if (inner is List && inner.isNotEmpty) {
+          final first = inner.first;
+          if (first is Map) {
+            d = Map<String, dynamic>.from(
+              first.map((k, v) => MapEntry(k.toString(), v)),
+            );
+          }
+        } else {
+          d = Map<String, dynamic>.from(
+            decoded.map((k, v) => MapEntry(k.toString(), v)),
+          );
+        }
+      }
+      if (d == null) throw Exception('Пустой ответ');
+      final m = d;
+
+      if (!mounted) return;
+      _populatePurchaseLinesFromMap(m);
+      setState(() {
+        _rowCtrl.text = m['row']?.toString() ?? '';
+        _shelfCtrl.text = m['shelf']?.toString() ?? '';
+        _boxCtrl.text = m['box']?.toString() ?? '';
+        _locationBarcodeCtrl.text = m['location_barcode']?.toString() ?? '';
+        _partNumberCtrl.text = m['part_number']?.toString() ?? '';
+        _nameCtrl.text = m['name']?.toString() ?? '';
+        _manufacturerCtrl.text = m['manufacturer']?.toString() ?? '';
+        _barcodeCtrl.text = m['barcode']?.toString() ?? '';
+
+        String? catId = m['category_id']?.toString();
+        if ((catId == null || catId.isEmpty) && m['category'] is Map) {
+          catId = (m['category'] as Map)['id']?.toString();
+        }
+        _categoryId = catId;
+
+        String? whId = m['warehouse_id']?.toString();
+        if ((whId == null || whId.isEmpty) && m['warehouse'] is Map) {
+          whId = (m['warehouse'] as Map)['id']?.toString();
+        }
+        if ((whId == null || whId.isEmpty) && m['warehouses'] is List) {
+          final wl = m['warehouses'] as List;
+          if (wl.isNotEmpty && wl.first is Map) {
+            whId = (wl.first as Map)['id']?.toString();
+          } else if (wl.isNotEmpty) {
+            whId = wl.first?.toString();
+          }
+        }
+        _warehouseId = whId;
+
+        final q = m['quantity'];
+        if (q is num) {
+          _qtyCtrl.text = '${q.toInt()}';
+        } else {
+          _qtyCtrl.text = q?.toString().isNotEmpty == true ? q.toString() : '1';
+        }
+
+        final u = m['unit_of_measurement'] ?? m['unit'];
+        _unitCtrl.text = u?.toString().trim().isNotEmpty == true ? u.toString() : 'шт';
+
+        _condition = m['condition']?.toString().trim().isNotEmpty == true
+            ? m['condition'].toString()
+            : 'new';
+
+        _nomenclatureNumberCtrl.text = m['nomenclature_number']?.toString() ?? '';
+        _codeCtrl.text = m['code']?.toString() ?? '';
+        _descriptionCtrl.text = m['description']?.toString() ?? '';
+        final mq = m['min_quantity'];
+        if (mq is num) {
+          _minQtyCtrl.text = '${mq.toInt()}';
+        } else {
+          _minQtyCtrl.text = mq?.toString() ?? '';
+        }
+
+        _categoryCustomCtrl.text = m['category_custom']?.toString() ?? '';
+
+        _oemParts
+          ..clear()
+          ..addAll(_stringListFromField(m['oem_numbers']));
+        _crossParts
+          ..clear()
+          ..addAll(_stringListFromField(m['cross_numbers']));
+
+        Map<String, dynamic>? specMap;
+        final specsRaw = m['specs'];
+        if (specsRaw is Map) {
+          specMap = Map<String, dynamic>.from(
+            specsRaw.map((k, v) => MapEntry(k.toString(), v)),
+          );
+        }
+        if (specMap != null) {
+          _massCtrl.text = specMap['mass']?.toString() ?? '';
+          _materialCtrl.text = specMap['material']?.toString() ?? '';
+          _pressureCtrl.text = specMap['pressure']?.toString() ?? '';
+          _flowCtrl.text = specMap['flow']?.toString() ?? '';
+        } else {
+          _massCtrl.text = m['mass']?.toString() ?? m['weight']?.toString() ?? '';
+          _materialCtrl.text = m['material']?.toString() ?? '';
+          _pressureCtrl.text = m['pressure']?.toString() ?? '';
+          _flowCtrl.text = m['flow']?.toString() ??
+              m['flow_rate']?.toString() ??
+              m['consumption']?.toString() ??
+              '';
+        }
+
+        _mediaUrls.clear();
+        final media = m['media'];
+        if (media is List) {
+          for (final e in media) {
+            final url = e?.toString().trim();
+            if (url != null && url.isNotEmpty) _mediaUrls.add(url);
+          }
+        }
+
+        _noteCtrl.text = m['note']?.toString() ?? '';
+
+        final pr = m['price'];
+        if (pr is num) {
+          _editPrice = pr;
+        } else if (pr != null) {
+          _editPrice = num.tryParse(pr.toString());
+        } else {
+          _editPrice = null;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить запчасть: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingExistingPart = false);
+    }
   }
 
   Future<void> _loadCategoriesAndWarehouses() async {
@@ -257,6 +554,178 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     }
   }
 
+  Future<void> _loadPurchaseRefs() async {
+    final workspaceId = FFAppState().workspace.trim();
+    final token = currentAuthenticationToken;
+    if (workspaceId.isEmpty || token == null || token.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _loadingPurchaseRefs = true;
+      _purchaseRefsError = null;
+    });
+
+    try {
+      final h = _fleetHeaders(workspaceId, token);
+      final uomUri =
+          Uri.parse('$_fleetBase/unit-of-measurement?workspace_id=$workspaceId');
+      var cpUri = Uri.parse(
+        '$_fleetBase/counterparty/preview?workspace_id=$workspaceId&type=PROVIDER',
+      );
+
+      final uomRes = await http.get(uomUri, headers: h);
+      var cpRes = await http.get(cpUri, headers: h);
+      if (cpRes.statusCode != 200) {
+        cpUri = Uri.parse(
+          '$_fleetBase/counterparty/preview?workspace_id=$workspaceId',
+        );
+        cpRes = await http.get(cpUri, headers: h);
+      }
+
+      final nextUom = <_NamedId>[];
+      if (uomRes.statusCode == 200) {
+        final dec = json.decode(utf8.decode(uomRes.bodyBytes));
+        final list = dec is List
+            ? dec
+            : (dec is Map && dec['data'] is List ? dec['data'] as List : []);
+        for (final e in list) {
+          if (e is Map) {
+            final id = e['id']?.toString();
+            final title = e['title']?.toString() ?? '';
+            if (id != null && id.isNotEmpty && title.isNotEmpty) {
+              nextUom.add(_NamedId(id, title));
+            }
+          }
+        }
+        nextUom.sort((a, b) => a.name.compareTo(b.name));
+      }
+
+      final nextCp = <Map<String, dynamic>>[];
+      if (cpRes.statusCode == 200) {
+        final dec = json.decode(utf8.decode(cpRes.bodyBytes));
+        final list = dec is List
+            ? dec
+            : (dec is Map && dec['data'] is List ? dec['data'] as List : []);
+        for (final e in list) {
+          if (e is Map) {
+            nextCp.add(
+              Map<String, dynamic>.from(
+                e.map((k, v) => MapEntry(k.toString(), v)),
+              ),
+            );
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _uomItems
+          ..clear()
+          ..addAll(nextUom);
+        _counterpartyPreview
+          ..clear()
+          ..addAll(nextCp);
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _purchaseRefsError = '$e');
+      }
+    } finally {
+      if (mounted) setState(() => _loadingPurchaseRefs = false);
+    }
+  }
+
+  void _disposePurchaseLines() {
+    for (final r in _purchaseLines) {
+      r.dispose();
+    }
+    _purchaseLines.clear();
+  }
+
+  void _populatePurchaseLinesFromMap(Map<String, dynamic> m) {
+    _disposePurchaseLines();
+    final purch = m['purchases'];
+    if (purch is List && purch.isNotEmpty) {
+      for (final raw in purch) {
+        if (raw is! Map) continue;
+        final line = _PurchaseLineRow();
+        final prov = raw['provider'];
+        if (prov is Map) {
+          line.providerSnapshot = Map<String, dynamic>.from(
+            prov.map((k, v) => MapEntry(k.toString(), v)),
+          );
+        }
+        final q = raw['quantity'];
+        line.quantityCtrl.text =
+            q is num ? '${q.toInt()}' : (q?.toString() ?? '1');
+        final u = raw['unit_of_measurement']?.toString().trim();
+        line.unitTitle =
+            u != null && u.isNotEmpty ? u : 'шт';
+        line.purchasePriceCtrl.text = raw['price']?.toString() ?? '';
+        line.salePriceCtrl.text = raw['sale_price']?.toString() ?? '';
+        _purchaseLines.add(line);
+      }
+    }
+    if (m['provider'] is Map && _purchaseLines.isEmpty) {
+      final line = _PurchaseLineRow();
+      line.providerSnapshot = Map<String, dynamic>.from(
+        (m['provider'] as Map).map((k, v) => MapEntry(k.toString(), v)),
+      );
+      line.quantityCtrl.text = '1';
+      final u = m['unit_of_measurement']?.toString().trim();
+      line.unitTitle = u != null && u.isNotEmpty ? u : 'шт';
+      line.purchasePriceCtrl.text = m['price']?.toString() ?? '';
+      line.salePriceCtrl.text = m['sale_price']?.toString() ?? '';
+      _purchaseLines.add(line);
+    }
+    if (_purchaseLines.isEmpty) {
+      _purchaseLines.add(_PurchaseLineRow());
+    }
+  }
+
+  num? _parsePriceField(String s) {
+    final t = s.trim().replaceAll(' ', '').replaceAll(',', '.');
+    if (t.isEmpty) return null;
+    return num.tryParse(t);
+  }
+
+  List<Map<String, dynamic>> _buildPurchasePayloads() {
+    final units = _unitTitlesForPurchasePicker();
+    final out = <Map<String, dynamic>>[];
+    for (final line in _purchaseLines) {
+      final snap = line.providerSnapshot;
+      if (snap == null || snap['id'] == null) continue;
+      final q = int.tryParse(line.quantityCtrl.text.trim()) ?? 1;
+      final pt = _parsePriceField(line.purchasePriceCtrl.text);
+      final st = _parsePriceField(line.salePriceCtrl.text);
+      final rawU = line.unitTitle.trim();
+      final u = rawU.isNotEmpty && units.contains(rawU)
+          ? rawU
+          : (units.isNotEmpty ? units.first : 'шт');
+      out.add(<String, dynamic>{
+        'provider': snap,
+        'quantity': q,
+        'unit_of_measurement': u,
+        'price': pt,
+        'sale_price': st,
+      });
+    }
+    return out;
+  }
+
+  void _addPurchaseLine() {
+    setState(() => _purchaseLines.add(_PurchaseLineRow()));
+  }
+
+  void _removePurchaseLineAt(int index) {
+    if (_purchaseLines.length <= 1) return;
+    setState(() {
+      final r = _purchaseLines.removeAt(index);
+      r.dispose();
+    });
+  }
+
   Future<String?> _uploadFileBytes(Uint8List bytes, String filename) async {
     final workspaceId = FFAppState().workspace.trim();
     if (workspaceId.isEmpty) {
@@ -341,9 +810,15 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     if (_nameCtrl.text.trim().isNotEmpty) n++;
     if (_partNumberCtrl.text.trim().isNotEmpty) n++;
     if (_categoryId != null && _categoryId!.trim().isNotEmpty) n++;
-    if (_warehouseId != null && _warehouseId!.trim().isNotEmpty) n++;
+    if (!_isEdit &&
+        _warehouseId != null &&
+        _warehouseId!.trim().isNotEmpty) {
+      n++;
+    }
     return n;
   }
+
+  int get _requiredTotalFields => _isEdit ? 3 : 4;
 
   Future<void> _submit() async {
     final workspaceId = context.read<FFAppState>().workspace.trim();
@@ -355,7 +830,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
       );
       return;
     }
-    if (userId.isEmpty) {
+    if (!_isEdit && userId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Не удалось определить user_id из профиля.'),
@@ -363,7 +838,21 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
       );
       return;
     }
-    if (_nameCtrl.text.trim().isEmpty ||
+    if (_isEdit) {
+      if (_nameCtrl.text.trim().isEmpty ||
+          _partNumberCtrl.text.trim().isEmpty ||
+          _categoryId == null ||
+          _categoryId!.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Заполните: наименование, артикул и категорию.',
+            ),
+          ),
+        );
+        return;
+      }
+    } else if (_nameCtrl.text.trim().isEmpty ||
         _partNumberCtrl.text.trim().isEmpty ||
         _categoryId == null ||
         _categoryId!.trim().isEmpty ||
@@ -391,64 +880,131 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     final oem = List<String>.from(_oemParts);
     final cross = List<String>.from(_crossParts);
     final specs = _buildSpecs();
+    final purchasePayloads = _buildPurchasePayloads();
 
-    final body = <String, dynamic>{
-      'workspace_id': workspaceId,
-      'user_id': userId,
-      'name': _nameCtrl.text.trim(),
-      'part_number': _partNumberCtrl.text.trim(),
-      'barcode': _emptyToNull(_barcodeCtrl.text),
-      'nomenclature_number': _emptyToNull(_nomenclatureNumberCtrl.text),
-      'manufacturer': _emptyToNull(_manufacturerCtrl.text),
-      'category_id': _categoryId!.trim(),
-      'category_custom': _emptyToNull(_categoryCustomCtrl.text),
-      'warehouse_id': _warehouseId!.trim(),
-      'quantity': qty,
-      'condition': _condition,
-      'unit_of_measurement': _unitCtrl.text.trim().isEmpty
-          ? 'шт'
-          : _unitCtrl.text.trim(),
-      'row': _emptyToNull(_rowCtrl.text),
-      'shelf': _emptyToNull(_shelfCtrl.text),
-      'box': _emptyToNull(_boxCtrl.text),
-      'location_barcode': _emptyToNull(_locationBarcodeCtrl.text),
-      'description': _emptyToNull(_descriptionCtrl.text),
-      'min_quantity': _minQtyCtrl.text.trim().isEmpty
+    final Object body;
+    if (_isEdit) {
+      final cc = _emptyToNull(_categoryCustomCtrl.text);
+      final mq = _minQtyCtrl.text.trim().isEmpty
           ? null
-          : int.tryParse(_minQtyCtrl.text.trim()),
-      'code': _emptyToNull(_codeCtrl.text),
-      'oem_numbers': oem,
-      'cross_numbers': cross,
-      'specs': specs,
-      'battery_parameters': null,
-      'tire_parameters': null,
-      'provider': null,
-      'price': null,
-      'sale_price': null,
-      'media': _mediaUrls.isEmpty ? <String>[] : List<String>.from(_mediaUrls),
-      'note': _emptyToNull(_noteCtrl.text),
-    };
+          : int.tryParse(_minQtyCtrl.text.trim());
+      final editMap = <String, dynamic>{
+        'name': _nameCtrl.text.trim(),
+        'part_number': _partNumberCtrl.text.trim(),
+        'unit': _unitCtrl.text.trim().isEmpty ? 'шт' : _unitCtrl.text.trim(),
+        'quantity': qty,
+        'category_id': _categoryId!.trim(),
+        'category_custom': cc,
+        'description': _descriptionCtrl.text,
+        'min_quantity': mq,
+        'nomenclature_number': _nomenclatureNumberCtrl.text,
+        'manufacturer': _manufacturerCtrl.text.trim(),
+        'price': purchasePayloads.isNotEmpty
+            ? (purchasePayloads.first['price'] as num?) ?? _editPrice ?? 0
+            : (_editPrice ?? 0),
+        'barcode': _barcodeCtrl.text,
+        'cross_numbers': cross,
+        'code': _emptyToNull(_codeCtrl.text),
+        'battery_parameters': null,
+        'tire_parameters': null,
+        'workspace_id': workspaceId,
+      };
+      if (purchasePayloads.isNotEmpty) {
+        editMap['provider'] = purchasePayloads.first['provider'];
+        editMap['sale_price'] = purchasePayloads.first['sale_price'];
+        if (purchasePayloads.length > 1) {
+          editMap['purchases'] = purchasePayloads;
+        }
+      }
+      body = editMap;
+    } else {
+      final createMap = <String, dynamic>{
+        'workspace_id': workspaceId,
+        'user_id': userId,
+        'name': _nameCtrl.text.trim(),
+        'part_number': _partNumberCtrl.text.trim(),
+        'barcode': _emptyToNull(_barcodeCtrl.text),
+        'nomenclature_number': _emptyToNull(_nomenclatureNumberCtrl.text),
+        'manufacturer': _emptyToNull(_manufacturerCtrl.text),
+        'category_id': _categoryId!.trim(),
+        'category_custom': _emptyToNull(_categoryCustomCtrl.text),
+        'warehouse_id': _warehouseId!.trim(),
+        'quantity': qty,
+        'condition': _condition,
+        'unit_of_measurement': _unitCtrl.text.trim().isEmpty
+            ? 'шт'
+            : _unitCtrl.text.trim(),
+        'row': _emptyToNull(_rowCtrl.text),
+        'shelf': _emptyToNull(_shelfCtrl.text),
+        'box': _emptyToNull(_boxCtrl.text),
+        'location_barcode': _emptyToNull(_locationBarcodeCtrl.text),
+        'description': _emptyToNull(_descriptionCtrl.text),
+        'min_quantity': _minQtyCtrl.text.trim().isEmpty
+            ? null
+            : int.tryParse(_minQtyCtrl.text.trim()),
+        'code': _emptyToNull(_codeCtrl.text),
+        'oem_numbers': oem,
+        'cross_numbers': cross,
+        'specs': specs,
+        'battery_parameters': null,
+        'tire_parameters': null,
+        'provider': null,
+        'price': null,
+        'sale_price': null,
+        'media': _mediaUrls.isEmpty ? <String>[] : List<String>.from(_mediaUrls),
+        'note': _emptyToNull(_noteCtrl.text),
+      };
+      if (purchasePayloads.isNotEmpty) {
+        createMap['provider'] = purchasePayloads.first['provider'];
+        createMap['price'] = purchasePayloads.first['price'];
+        createMap['sale_price'] = purchasePayloads.first['sale_price'];
+        if (purchasePayloads.length > 1) {
+          createMap['purchases'] = purchasePayloads;
+        }
+      }
+      body = createMap;
+    }
 
     setState(() => _saving = true);
     try {
-      final uri = Uri.parse('$_fleetBase/part-nomenclature/create');
-      final response = await http.post(
-        uri,
-        headers: {
-          'Authorization': token,
-          'Workspace': workspaceId,
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: utf8.encode(json.encode(body)),
-      );
-      if (response.statusCode != 200 && response.statusCode != 201) {
+      final http.Response response;
+      if (_isEdit) {
+        final id = widget.nomenclatureId!.trim();
+        final uri = Uri.parse('$_fleetBase/part-nomenclature/$id');
+        response = await http.put(
+          uri,
+          headers: {
+            'Authorization': token,
+            'Workspace': workspaceId,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: utf8.encode(json.encode(body)),
+        );
+      } else {
+        final uri = Uri.parse('$_fleetBase/part-nomenclature/create');
+        response = await http.post(
+          uri,
+          headers: {
+            'Authorization': token,
+            'Workspace': workspaceId,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          body: utf8.encode(json.encode(body)),
+        );
+      }
+      final okCreate = response.statusCode == 200 || response.statusCode == 201;
+      final okUpdate =
+          response.statusCode == 200 || response.statusCode == 204;
+      if (_isEdit ? !okUpdate : !okCreate) {
         throw Exception(
           'HTTP ${response.statusCode}: ${utf8.decode(response.bodyBytes)}',
         );
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Запчасть создана')),
+          SnackBar(
+            content: Text(_isEdit ? 'Запчасть обновлена' : 'Запчасть создана'),
+          ),
         );
         Navigator.of(context).pop(true);
       }
@@ -467,41 +1023,65 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   Widget build(BuildContext context) {
     context.watch<FFAppState>();
     final theme = FlutterFlowTheme.of(context);
+    // Не форсировать тёмную схему: следовать теме приложения / системы.
+    final appBrightness = Theme.of(context).brightness;
+    final shellColorScheme = ColorScheme.fromSeed(
+      seedColor: theme.primary,
+      brightness: appBrightness,
+    );
 
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: Scaffold(
-        backgroundColor: _kScreenBg,
-        appBar: AppBar(
-          backgroundColor: theme.secondaryBackground,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            color: theme.primaryText,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          centerTitle: true,
-          title: Text(
-            'Новая карточка',
-            style: theme.bodyMedium.copyWith(
-              fontSize: 18.0,
-              letterSpacing: 0.0,
-              fontWeight: FontWeight.w600,
-              color: theme.primaryText,
-            ),
-          ),
+    return Theme(
+      data: ThemeData(
+        brightness: appBrightness,
+        colorScheme: shellColorScheme,
+        useMaterial3: true,
+        scaffoldBackgroundColor: shellColorScheme.surface,
+        dividerColor: shellColorScheme.outline.withValues(alpha: 0.35),
+      ),
+      child: Builder(
+        builder: (innerContext) {
+          final pal = _SpareCreatePalette.of(innerContext);
+          final onSurf = shellColorScheme.onSurface;
+
+          return GestureDetector(
+            onTap: () {
+              FocusScope.of(innerContext).unfocus();
+              FocusManager.instance.primaryFocus?.unfocus();
+            },
+            child: Scaffold(
+              backgroundColor: pal.screenBg,
+              appBar: AppBar(
+                backgroundColor: shellColorScheme.surface,
+                foregroundColor: onSurf,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                iconTheme: IconThemeData(color: onSurf),
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  color: onSurf,
+                  onPressed: () => Navigator.of(innerContext).pop(),
+                ),
+                centerTitle: true,
+                title: Text(
+                  _isEdit ? 'Редактирование' : 'Новая карточка',
+                  style: theme.bodyMedium.copyWith(
+                    fontSize: 18.0,
+                    letterSpacing: 0.0,
+                    fontWeight: FontWeight.w600,
+                    color: onSurf,
+                  ),
+                ),
           actions: [
             if (_saving)
-              const Padding(
-                padding: EdgeInsets.all(16),
+              Padding(
+                padding: const EdgeInsets.all(16),
                 child: SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.primary,
+                  ),
                 ),
               )
             else
@@ -524,37 +1104,67 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(52),
-            child: _buildTabs(theme),
+            child: _buildTabs(theme, pal, shellColorScheme),
           ),
         ),
-        body: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildMainPage(theme),
-                    _buildReferencePage(theme),
-                  ],
+        body: Stack(
+          children: [
+            SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildMainPage(theme, pal),
+                        _buildReferencePage(theme, pal),
+                      ],
+                    ),
+                  ),
+                  _buildBottomSaveBar(theme, pal),
+                ],
+              ),
+            ),
+            if (_loadingExistingPart)
+              Container(
+                color: pal.screenBg.withValues(alpha: 0.85),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: theme.primary),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Загрузка запчасти…',
+                        style: theme.bodyMedium.copyWith(
+                          color: shellColorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              _buildBottomSaveBar(theme),
-            ],
-          ),
+          ],
         ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildTabs(FlutterFlowTheme theme) {
+  Widget _buildTabs(
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal,
+    ColorScheme scheme,
+  ) {
     final i = _tabController.index;
     Color tabIconTextColor(bool selected) =>
-        selected ? theme.primary : theme.secondaryText;
+        selected ? theme.primary : scheme.onSurfaceVariant;
 
     return Container(
-      color: const Color(0xFFEDEEF2),
+      color: pal.tabBarBg,
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
       child: TabBar(
         controller: _tabController,
@@ -563,11 +1173,11 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         dividerColor: Colors.transparent,
         splashBorderRadius: BorderRadius.circular(20),
         indicator: BoxDecoration(
-          color: Colors.white,
+          color: pal.tabIndicator,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
+              color: Colors.black.withValues(alpha: pal.cardShadowA * 0.24),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -625,24 +1235,25 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
 
   Widget _buildSectionCard({
     required FlutterFlowTheme theme,
+    required _SpareCreatePalette pal,
     required String title,
     required Widget child,
     IconData? titleIcon,
     bool locationStyle = false,
     List<Widget>? titleActions,
   }) {
-    final bg = locationStyle ? _kLocTint : Colors.white;
+    final bg = locationStyle ? pal.locTint : pal.surface;
     final decoration = BoxDecoration(
       color: bg,
       borderRadius: BorderRadius.circular(_kRadius),
       border: locationStyle
-          ? Border.all(color: _kLocBorder, width: 1)
+          ? Border.all(color: pal.locBorder, width: 1)
           : Border.all(color: Colors.transparent),
       boxShadow: locationStyle
           ? null
           : [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
+                color: Colors.black.withValues(alpha: pal.cardShadowA),
                 blurRadius: 14,
                 offset: const Offset(0, 3),
               ),
@@ -699,7 +1310,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   }
 
   Widget _buildCatalogDropdown(
-    FlutterFlowTheme theme, {
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal, {
     required String label,
     required String? value,
     required List<_NamedId> items,
@@ -733,14 +1345,15 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: pal.surface,
             borderRadius: BorderRadius.circular(_kRadius),
-            border: Border.all(color: _kFieldBorder),
+            border: Border.all(color: pal.fieldBorder),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               value: effectiveValue,
+              dropdownColor: pal.surface,
               hint: Text(
                 items.isEmpty ? 'Нет вариантов' : 'Выберите',
                 style: theme.bodyMedium.copyWith(
@@ -774,7 +1387,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   }
 
   Widget _buildTextField(
-    FlutterFlowTheme theme, {
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal, {
     required String label,
     String? hint,
     required TextEditingController controller,
@@ -784,7 +1398,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     Color? labelColor,
     bool locationFieldStyle = false,
   }) {
-    final borderColor = locationFieldStyle ? _kLocBorder : _kFieldBorder;
+    final borderColor = locationFieldStyle ? pal.locBorder : pal.fieldBorder;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -818,7 +1432,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               fontSize: 14,
             ),
             filled: true,
-            fillColor: Colors.white,
+            fillColor: pal.surface,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
@@ -855,7 +1469,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   }
 
   Widget _buildBarcodeField(
-    FlutterFlowTheme theme, {
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal, {
     required String label,
     String? hint,
     required TextEditingController controller,
@@ -863,6 +1478,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     bool locationFieldStyle = false,
     Color? labelColor,
   }) {
+    final borderSideColor =
+        locationFieldStyle ? pal.locBorder : pal.fieldBorder;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -885,7 +1502,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                     fontSize: 14,
                   ),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: pal.surface,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -893,17 +1510,11 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
-                    borderSide: BorderSide(
-                      color:
-                          locationFieldStyle ? _kLocBorder : _kFieldBorder,
-                    ),
+                    borderSide: BorderSide(color: borderSideColor),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
-                    borderSide: BorderSide(
-                      color:
-                          locationFieldStyle ? _kLocBorder : _kFieldBorder,
-                    ),
+                    borderSide: BorderSide(color: borderSideColor),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
@@ -917,7 +1528,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
             Tooltip(
               message: tooltip,
               child: Material(
-                color: Colors.white,
+                color: pal.surface,
                 borderRadius: BorderRadius.circular(12),
                 child: InkWell(
                   onTap: () => _scanBarcodeInto(controller),
@@ -928,10 +1539,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color:
-                            locationFieldStyle ? _kLocBorder : _kFieldBorder,
-                      ),
+                      border: Border.all(color: borderSideColor),
                     ),
                     child: Icon(
                       Icons.qr_code_scanner_rounded,
@@ -954,7 +1562,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     setState(() => _qtyCtrl.text = '$v');
   }
 
-  Widget _buildQtyStepper(FlutterFlowTheme theme) {
+  Widget _buildQtyStepper(FlutterFlowTheme theme, _SpareCreatePalette pal) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -962,9 +1570,9 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: pal.surface,
             borderRadius: BorderRadius.circular(_kRadius),
-            border: Border.all(color: _kFieldBorder),
+            border: Border.all(color: pal.fieldBorder),
           ),
           child: Row(
             children: [
@@ -973,13 +1581,22 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                 icon: Icon(Icons.remove_rounded, color: theme.primaryText),
               ),
               Expanded(
-                child: Text(
-                  _qtyCtrl.text.trim().isEmpty ? '1' : _qtyCtrl.text.trim(),
+                child: TextField(
+                  controller: _qtyCtrl,
+                  keyboardType: TextInputType.number,
                   textAlign: TextAlign.center,
                   style: theme.bodyMedium.copyWith(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
                   ),
+                  decoration: const InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    border: InputBorder.none,
+                  ),
+                  onChanged: (_) {
+                    if (mounted) setState(() {});
+                  },
                 ),
               ),
               IconButton(
@@ -993,7 +1610,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     );
   }
 
-  Widget _buildUnitDropdown(FlutterFlowTheme theme) {
+  Widget _buildUnitDropdown(FlutterFlowTheme theme, _SpareCreatePalette pal) {
     const units = ['шт', 'кг', 'м', 'л', 'компл'];
     var v = _unitCtrl.text.trim();
     if (v.isEmpty || !units.contains(v)) v = 'шт';
@@ -1006,14 +1623,15 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: pal.surface,
             borderRadius: BorderRadius.circular(_kRadius),
-            border: Border.all(color: _kFieldBorder),
+            border: Border.all(color: pal.fieldBorder),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: v,
               isExpanded: true,
+              dropdownColor: pal.surface,
               icon: Icon(Icons.keyboard_arrow_down_rounded,
                   color: theme.secondaryText),
               items: units
@@ -1036,7 +1654,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   }
 
   Widget _buildNextNavCard(
-    FlutterFlowTheme theme, {
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal, {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
@@ -1044,7 +1663,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Material(
-        color: Colors.white,
+        color: pal.surface,
         borderRadius: BorderRadius.circular(_kRadius),
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -1054,10 +1673,10 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(_kRadius),
-              border: Border.all(color: _kFieldBorder),
+              border: Border.all(color: pal.fieldBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withValues(alpha: pal.navCardShadowA),
                   blurRadius: 10,
                   offset: const Offset(0, 2),
                 ),
@@ -1181,7 +1800,8 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
   }
 
   Widget _buildLineListEditor(
-    FlutterFlowTheme theme, {
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal, {
     required TextEditingController input,
     required String hint,
     required VoidCallback onAdd,
@@ -1206,7 +1826,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                     fontSize: 14,
                   ),
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: pal.surface,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14,
@@ -1214,11 +1834,11 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
-                    borderSide: const BorderSide(color: _kFieldBorder),
+                    borderSide: BorderSide(color: pal.fieldBorder),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
-                    borderSide: const BorderSide(color: _kFieldBorder),
+                    borderSide: BorderSide(color: pal.fieldBorder),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(_kRadius),
@@ -1262,7 +1882,9 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
             children: items
                 .map(
                   (e) => Chip(
-                    label: Text(e),
+                    label: Text(e, style: theme.bodySmall),
+                    backgroundColor: pal.surface,
+                    side: BorderSide(color: pal.fieldBorder),
                     onDeleted: () => setState(() => items.remove(e)),
                   ),
                 )
@@ -1272,7 +1894,307 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     );
   }
 
-  Widget _buildMainPage(FlutterFlowTheme theme) {
+  List<String> _unitTitlesForPurchasePicker() {
+    if (_uomItems.isNotEmpty) {
+      return _uomItems.map((e) => e.name).toList();
+    }
+    return const ['шт', 'кг', 'м', 'л', 'компл'];
+  }
+
+  Widget _buildPurchaseUomDropdown(
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal,
+    _PurchaseLineRow line,
+  ) {
+    final units = _unitTitlesForPurchasePicker();
+    final raw = line.unitTitle.trim();
+    final v =
+        raw.isNotEmpty && units.contains(raw) ? raw : units.first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('ЕД. ИЗМ.', style: _upperLabelStyle(theme)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: pal.surface,
+            borderRadius: BorderRadius.circular(_kRadius),
+            border: Border.all(color: pal.fieldBorder),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: v,
+              isExpanded: true,
+              dropdownColor: pal.surface,
+              icon: Icon(Icons.keyboard_arrow_down_rounded,
+                  color: theme.secondaryText),
+              items: units
+                  .map(
+                    (u) => DropdownMenuItem(
+                      value: u,
+                      child: Text(u, style: theme.bodyMedium),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (x) {
+                if (x == null) return;
+                setState(() => line.unitTitle = x);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<DropdownMenuItem<String>> _supplierDropdownItems(
+    _PurchaseLineRow line,
+  ) {
+    final seen = <String>{};
+    final items = <DropdownMenuItem<String>>[];
+    for (final c in _counterpartyPreview) {
+      final id = c['id']?.toString();
+      if (id == null || id.isEmpty || seen.contains(id)) continue;
+      seen.add(id);
+      items.add(
+        DropdownMenuItem<String>(
+          value: id,
+          child: Text(
+            c['title']?.toString() ?? '—',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+    final snap = line.providerSnapshot;
+    final sid = snap?['id']?.toString();
+    if (sid != null && sid.isNotEmpty && !seen.contains(sid) && snap != null) {
+      items.add(
+        DropdownMenuItem<String>(
+          value: sid,
+          child: Text(
+            snap['title']?.toString() ?? sid,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+    }
+    return items;
+  }
+
+  Widget _buildPurchaseLineCard(
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal,
+    int index,
+  ) {
+    final line = _purchaseLines[index];
+    final pid = line.providerSnapshot?['id']?.toString();
+    final supplierItems = _supplierDropdownItems(line);
+    final effectivePid = (pid != null &&
+            supplierItems.any((e) => e.value == pid))
+        ? pid
+        : null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: pal.surface,
+        borderRadius: BorderRadius.circular(_kRadius),
+        border: Border.all(color: pal.fieldBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  'Поставка ${index + 1}',
+                  style: theme.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              if (_purchaseLines.length > 1)
+                IconButton(
+                  onPressed: () => _removePurchaseLineAt(index),
+                  icon: Icon(Icons.close_rounded, color: theme.secondaryText),
+                  tooltip: 'Удалить строку',
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('ПОСТАВЩИК', style: _upperLabelStyle(theme)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: pal.surface,
+              borderRadius: BorderRadius.circular(_kRadius),
+              border: Border.all(color: pal.fieldBorder),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: effectivePid,
+                isExpanded: true,
+                hint: Text(
+                  'Выберите поставщика',
+                  style: theme.bodyMedium.copyWith(
+                    color: theme.secondaryText.withValues(alpha: 0.65),
+                  ),
+                ),
+                dropdownColor: pal.surface,
+                icon: Icon(Icons.keyboard_arrow_down_rounded,
+                    color: theme.secondaryText),
+                items: supplierItems,
+                onChanged: supplierItems.isEmpty
+                    ? null
+                    : (id) {
+                        if (id == null) return;
+                        setState(() {
+                          for (final e in _counterpartyPreview) {
+                            if (e['id']?.toString() == id) {
+                              line.providerSnapshot =
+                                  Map<String, dynamic>.from(e);
+                              return;
+                            }
+                          }
+                          final s = line.providerSnapshot;
+                          if (s != null && s['id']?.toString() == id) {
+                            line.providerSnapshot =
+                                Map<String, dynamic>.from(s);
+                          } else {
+                            line.providerSnapshot = null;
+                          }
+                        });
+                      },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: _buildTextField(
+                  theme,
+                  pal,
+                  label: 'Кол-во',
+                  controller: line.quantityCtrl,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: _buildPurchaseUomDropdown(theme, pal, line),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  theme,
+                  pal,
+                  label: 'Цена закупа',
+                  hint: '0',
+                  controller: line.purchasePriceCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTextField(
+                  theme,
+                  pal,
+                  label: 'Цена продажи',
+                  hint: '0',
+                  controller: line.salePriceCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPurchaseSection(
+    FlutterFlowTheme theme,
+    _SpareCreatePalette pal,
+  ) {
+    return _buildSectionCard(
+      theme: theme,
+      pal: pal,
+      title: 'Закупка и поставщики',
+      titleIcon: Icons.local_shipping_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_loadingPurchaseRefs)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: CircularProgressIndicator(color: theme.primary),
+              ),
+            )
+          else if (_purchaseRefsError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _purchaseRefsError!,
+                style: theme.bodySmall.copyWith(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.red.shade300
+                      : Colors.red.shade700,
+                ),
+              ),
+            ),
+          Text(
+            'Можно добавить несколько поставок: поставщик, количество, единица, '
+            'цена закупа и продажи.',
+            style: theme.bodySmall.copyWith(
+              color: theme.secondaryText,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          for (var i = 0; i < _purchaseLines.length; i++)
+            _buildPurchaseLineCard(theme, pal, i),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _addPurchaseLine,
+              icon: Icon(Icons.add_rounded, color: theme.primary),
+              label: Text(
+                'Добавить поставщика',
+                style: theme.bodyMedium.copyWith(
+                  color: theme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainPage(FlutterFlowTheme theme, _SpareCreatePalette pal) {
     final locLabel = theme.primary;
 
     return ListView(
@@ -1280,6 +2202,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
       children: [
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Местоположение',
           titleIcon: Icons.location_on_outlined,
           locationStyle: true,
@@ -1301,6 +2224,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
             children: [
               _buildTextField(
                 theme,
+                pal,
                 label: 'Зона / ряд',
                 hint: 'напр. А-02',
                 controller: _rowCtrl,
@@ -1310,6 +2234,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Стеллаж – полка',
                 hint: 'напр. ST-04 / Р-12',
                 controller: _shelfCtrl,
@@ -1319,6 +2244,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Лоток / ящик',
                 hint: 'напр. Bin-15',
                 controller: _boxCtrl,
@@ -1328,6 +2254,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildBarcodeField(
                 theme,
+                pal,
                 label: 'Штрихкод ячейки',
                 hint: 'EAN / ячейка',
                 controller: _locationBarcodeCtrl,
@@ -1339,6 +2266,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Идентификация',
           titleIcon: Icons.qr_code_2_rounded,
           child: Column(
@@ -1348,6 +2276,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 16),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Артикул',
                 hint: 'напр. 708-2L-00300',
                 controller: _partNumberCtrl,
@@ -1356,6 +2285,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Наименование',
                 hint: 'Гидронасос основной',
                 controller: _nameCtrl,
@@ -1364,6 +2294,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Бренд',
                 hint: 'Komatsu',
                 controller: _manufacturerCtrl,
@@ -1371,6 +2302,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildBarcodeField(
                 theme,
+                pal,
                 label: 'Штрихкод товара',
                 hint: 'EAN / UPC',
                 controller: _barcodeCtrl,
@@ -1380,22 +2312,27 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Реквизиты номенклатуры',
           titleIcon: Icons.folder_outlined,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_loadingRefs)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(child: CircularProgressIndicator()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: CircularProgressIndicator(color: theme.primary),
+                  ),
                 )
               else ...[
                 if (_refsError != null) ...[
                   Text(
                     _refsError!,
                     style: theme.bodySmall.copyWith(
-                      color: Colors.red.shade700,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.red.shade300
+                          : Colors.red.shade700,
                       fontSize: 12,
                     ),
                   ),
@@ -1408,6 +2345,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                 ],
                 _buildCatalogDropdown(
                   theme,
+                  pal,
                   label: 'Категория',
                   value: _categoryId,
                   items: _categories,
@@ -1417,6 +2355,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                 const SizedBox(height: 12),
                 _buildCatalogDropdown(
                   theme,
+                  pal,
                   label: 'Склад',
                   value: _warehouseId,
                   items: _warehouses,
@@ -1427,18 +2366,21 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               ],
               _buildTextField(
                 theme,
+                pal,
                 label: 'Номер номенклатуры',
                 controller: _nomenclatureNumberCtrl,
               ),
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Код',
                 controller: _codeCtrl,
               ),
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Описание',
                 controller: _descriptionCtrl,
                 maxLines: 3,
@@ -1446,8 +2388,10 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
             ],
           ),
         ),
+        _buildPurchaseSection(theme, pal),
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Складской факт',
           titleIcon: Icons.inventory_2_outlined,
           child: Column(
@@ -1456,14 +2400,15 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(flex: 3, child: _buildQtyStepper(theme)),
+                  Expanded(flex: 3, child: _buildQtyStepper(theme, pal)),
                   const SizedBox(width: 12),
-                  Expanded(flex: 2, child: _buildUnitDropdown(theme)),
+                  Expanded(flex: 2, child: _buildUnitDropdown(theme, pal)),
                 ],
               ),
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Мин. остаток',
                 controller: _minQtyCtrl,
                 keyboardType: TextInputType.number,
@@ -1473,11 +2418,11 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 8),
               Row(
                 children: [
-                  _buildConditionChip(theme, 'Новое', 'new'),
+                  _buildConditionChip(theme, pal, 'Новое', 'new'),
                   const SizedBox(width: 8),
-                  _buildConditionChip(theme, 'Б/У', 'used'),
+                  _buildConditionChip(theme, pal, 'Б/У', 'used'),
                   const SizedBox(width: 8),
-                  _buildConditionChip(theme, 'Брак', 'defect'),
+                  _buildConditionChip(theme, pal, 'Брак', 'defect'),
                 ],
               ),
               const SizedBox(height: 16),
@@ -1493,14 +2438,18 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
                     constraints: const BoxConstraints(minHeight: 120),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(_kRadius),
-                      color: Colors.white,
+                      color: pal.surface,
                       border: Border.all(
-                        color: _kFieldBorder,
+                        color: pal.fieldBorder,
                         width: 1.2,
                       ),
                     ),
                     child: _uploading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? Center(
+                            child: CircularProgressIndicator(
+                              color: theme.primary,
+                            ),
+                          )
                         : _mediaUrls.isEmpty
                             ? Center(
                                 child: Column(
@@ -1565,6 +2514,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 16),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Примечание',
                 hint: 'Заметки кладовщика...',
                 controller: _noteCtrl,
@@ -1575,6 +2525,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildNextNavCard(
           theme,
+          pal,
           title: 'Далее: Справочник',
           subtitle: 'OEM-коды, кросс-номера, характеристики',
           onTap: () => _tabController.animateTo(1),
@@ -1585,6 +2536,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
 
   Widget _buildConditionChip(
     FlutterFlowTheme theme,
+    _SpareCreatePalette pal,
     String label,
     String value,
   ) {
@@ -1597,10 +2549,10 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
           padding: const EdgeInsets.symmetric(vertical: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? _kGreenState : Colors.white,
+            color: selected ? _kGreenState : pal.unselectedChipBg,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? _kGreenState : _kFieldBorder,
+              color: selected ? _kGreenState : pal.fieldBorder,
             ),
           ),
           child: Text(
@@ -1616,16 +2568,18 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     );
   }
 
-  Widget _buildReferencePage(FlutterFlowTheme theme) {
+  Widget _buildReferencePage(FlutterFlowTheme theme, _SpareCreatePalette pal) {
     return ListView(
       padding: const EdgeInsets.only(top: 8, bottom: 24),
       children: [
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'OEM номера',
           titleIcon: Icons.local_offer_outlined,
           child: _buildLineListEditor(
             theme,
+            pal,
             input: _oemInputCtrl,
             hint: 'напр. 708-2L-00300',
             onAdd: _addOemPart,
@@ -1635,10 +2589,12 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Кросс-номера / Аналоги',
           titleIcon: Icons.verified_outlined,
           child: _buildLineListEditor(
             theme,
+            pal,
             input: _crossInputCtrl,
             hint: 'напр. Handok HPV102',
             onAdd: _addCrossPart,
@@ -1648,12 +2604,14 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildSectionCard(
           theme: theme,
+          pal: pal,
           title: 'Характеристики',
           titleIcon: Icons.tune_rounded,
           child: Column(
             children: [
               _buildTextField(
                 theme,
+                pal,
                 label: 'Масса',
                 hint: 'напр. 45 кг',
                 controller: _massCtrl,
@@ -1661,6 +2619,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Материал',
                 hint: 'Сталь, чугун',
                 controller: _materialCtrl,
@@ -1668,6 +2627,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Давление (если применимо)',
                 hint: 'напр. 35 МПа',
                 controller: _pressureCtrl,
@@ -1675,6 +2635,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
               const SizedBox(height: 12),
               _buildTextField(
                 theme,
+                pal,
                 label: 'Расход',
                 hint: 'напр. 11',
                 controller: _flowCtrl,
@@ -1684,6 +2645,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
         ),
         _buildNextNavCard(
           theme,
+          pal,
           title: 'Далее: сохранение',
           subtitle: 'Проверьте данные и нажмите галочку вверху',
           onTap: () => _tabController.animateTo(0),
@@ -1692,7 +2654,7 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
     );
   }
 
-  Widget _buildBottomSaveBar(FlutterFlowTheme theme) {
+  Widget _buildBottomSaveBar(FlutterFlowTheme theme, _SpareCreatePalette pal) {
     final filled = _requiredFilledCount();
     return Container(
       width: double.infinity,
@@ -1700,13 +2662,15 @@ class _SparePartCreateCardWidgetState extends State<SparePartCreateCardWidget>
       decoration: BoxDecoration(
         color: theme.secondaryBackground,
         border: Border(
-          top: BorderSide(color: _kFieldBorder.withValues(alpha: 0.6)),
+          top: BorderSide(
+            color: pal.fieldBorder.withValues(alpha: pal.bottomBarDividerA),
+          ),
         ),
       ),
       child: SafeArea(
         top: false,
         child: Text(
-          'Обязательные: наименование, артикул, категория, склад — $filled/4. Сохранение — кнопка с галочкой сверху.',
+          'Обязательные: наименование, артикул, категория${_isEdit ? '' : ', склад'} — $filled/$_requiredTotalFields. Сохранение — кнопка с галочкой сверху.',
           textAlign: TextAlign.center,
           style: theme.bodyMedium.copyWith(
             fontSize: 11.5,

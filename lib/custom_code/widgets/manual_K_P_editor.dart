@@ -34,9 +34,16 @@ class ManualKPEditor extends StatefulWidget {
 }
 
 class _ManualKPEditorState extends State<ManualKPEditor> {
+  static const Set<String> _allowedCharacteristics = {
+    'Оригинал',
+    'Аналог',
+  };
   bool _isUploading = false;
+  bool _isLoadingSuppliers = true;
+  bool _isCreatingSupplier = false;
   List<String> _uploadedFileUrls = [];
   List<Map<String, dynamic>> _inventoryItems = [];
+  List<dynamic> _suppliers = [];
 
   final TextEditingController _deliveryPriceController =
       TextEditingController();
@@ -48,11 +55,13 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
 
   String _offerId = '';
   Map<String, dynamic> _counterparty = {};
+  String? _selectedSupplierId;
 
   @override
   void initState() {
     super.initState();
     _prefillData();
+    _fetchSuppliers();
   }
 
   void _prefillData() {
@@ -60,6 +69,7 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
 
     _offerId = offer['id']?.toString() ?? '';
     _counterparty = Map<String, dynamic>.from(offer['counterparty'] ?? {});
+    _selectedSupplierId = _counterparty['id']?.toString();
 
     _deliveryPriceController.text =
         (offer['price'] ?? '').toString();
@@ -91,7 +101,12 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
       if (matchingOffer != null) {
         _priceControllers[id]!.text =
             (matchingOffer['price'] ?? '').toString();
-        _characteristics[id] = matchingOffer['characteristic']?.toString();
+        final rawCharacteristic =
+            matchingOffer['characteristic']?.toString().trim();
+        _characteristics[id] = (rawCharacteristic != null &&
+                _allowedCharacteristics.contains(rawCharacteristic))
+            ? rawCharacteristic
+            : null;
       }
     }
   }
@@ -109,6 +124,199 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
   String? _emptyToNull(String text) {
     final value = text.trim();
     return value.isEmpty ? null : value;
+  }
+
+  Map<String, String> get _headers => {
+        'Authorization': widget.authToken,
+        'Workspace': widget.workspaceId,
+        'workspace': widget.workspaceId,
+      };
+
+  Future<void> _fetchSuppliers() async {
+    final url = Uri.parse(
+        'https://fleet.equipmetry.kz/api/v1/workspace/counterparty/preview?workspace_id=${widget.workspaceId}&type=PROVIDER');
+    try {
+      final response = await http.get(url, headers: _headers);
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body);
+        if (!mounted) return;
+        setState(() {
+          _suppliers = list is List ? list : <dynamic>[];
+          _isLoadingSuppliers = false;
+        });
+      } else {
+        if (mounted) setState(() => _isLoadingSuppliers = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingSuppliers = false);
+    }
+  }
+
+  Future<void> _showCreateSupplierDialog() async {
+    final typeController = ValueNotifier<String>('PROVIDER');
+    final titleController = TextEditingController();
+    final addressController = TextEditingController();
+    final phoneController = TextEditingController();
+    final emailController = TextEditingController();
+
+    Future<void> submit(StateSetter setStateDialog) async {
+      if (titleController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Заполните наименование')),
+        );
+        return;
+      }
+
+      setStateDialog(() => _isCreatingSupplier = true);
+      try {
+        final response = await http.post(
+          Uri.parse('https://fleet.equipmetry.kz/api/v1/workspace/counterparty'),
+          headers: {
+            ..._headers,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'type': typeController.value,
+            'title': titleController.text.trim(),
+            'address': _emptyToNull(addressController.text),
+            'phone_number': _emptyToNull(phoneController.text),
+            'email': _emptyToNull(emailController.text),
+          }),
+        );
+
+        if (response.statusCode != 200 && response.statusCode != 201) {
+          throw Exception(
+            utf8.decode(response.bodyBytes).trim().isEmpty
+                ? 'HTTP ${response.statusCode}'
+                : utf8.decode(response.bodyBytes),
+          );
+        }
+
+        dynamic created = jsonDecode(utf8.decode(response.bodyBytes));
+        if (created is Map && created['data'] != null) {
+          created = created['data'];
+        }
+        if (created is List && created.isNotEmpty) {
+          created = created.first;
+        }
+        if (created is! Map) {
+          throw Exception('Неожиданный ответ сервера: $created');
+        }
+
+        final supplier = Map<String, dynamic>.from(created);
+        if (!mounted) return;
+        setState(() {
+          _suppliers = [supplier, ..._suppliers];
+          _counterparty = supplier;
+          _selectedSupplierId = supplier['id']?.toString();
+        });
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Поставщик создан')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка создания поставщика: $e')),
+        );
+      } finally {
+        if (mounted) setStateDialog(() => _isCreatingSupplier = false);
+      }
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) => Dialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ValueListenableBuilder<String>(
+                      valueListenable: typeController,
+                      builder: (_, value, __) => DropdownButtonFormField<String>(
+                        initialValue: value,
+                        decoration: _labeledDecoration('Тип *'),
+                        items: const [
+                          DropdownMenuItem(value: 'PROVIDER', child: Text('Поставщик')),
+                          DropdownMenuItem(value: 'SERVICE_STATION', child: Text('СТО')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) typeController.value = v;
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: titleController,
+                      decoration: _labeledDecoration('Наименование *'),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: addressController,
+                      decoration: _labeledDecoration('Адрес'),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: _labeledDecoration('Номер телефона'),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: _labeledDecoration('Почта'),
+                    ),
+                    const SizedBox(height: 18),
+                    ElevatedButton(
+                      onPressed: _isCreatingSupplier ? null : () => submit(setStateDialog),
+                      child: _isCreatingSupplier
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Сохранить'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    titleController.dispose();
+    addressController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
+    typeController.dispose();
+  }
+
+  List<Map<String, dynamic>> get _supplierOptions {
+    final seen = <String>{};
+    final options = <Map<String, dynamic>>[];
+    for (final raw in _suppliers) {
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw.map((k, v) => MapEntry(k.toString(), v)));
+      final id = m['id']?.toString();
+      if (id == null || id.isEmpty || seen.contains(id)) continue;
+      seen.add(id);
+      options.add(m);
+    }
+    final cpId = _counterparty['id']?.toString();
+    if (cpId != null &&
+        cpId.isNotEmpty &&
+        !options.any((e) => e['id']?.toString() == cpId)) {
+      options.insert(0, Map<String, dynamic>.from(_counterparty));
+    }
+    return options;
   }
 
   Future<void> _removeItem(String id) async {
@@ -280,24 +488,54 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
         child: Column(
           children: [
             _buildSection("Поставщик", [
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                decoration: BoxDecoration(
-                  color: FlutterFlowTheme.of(context).primaryBackground,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: FlutterFlowTheme.of(context).alternate),
-                ),
-                child: Text(
-                  _counterparty['title'] ?? 'Поставщик не указан',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: FlutterFlowTheme.of(context).primaryText,
-                  ),
-                ),
-              ),
+              _isLoadingSuppliers
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        DropdownButtonFormField<String?>(
+                          initialValue: _supplierOptions.any(
+                                  (s) => s['id']?.toString() == _selectedSupplierId)
+                              ? _selectedSupplierId
+                              : null,
+                          decoration: _inputDecoration("Выберите поставщика"),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Без поставщика'),
+                            ),
+                            ..._supplierOptions.map(
+                              (s) => DropdownMenuItem<String?>(
+                                value: s['id']?.toString(),
+                                child: Text(s['title']?.toString() ?? '-'),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedSupplierId = val;
+                              if (val == null) {
+                                _counterparty = {};
+                                return;
+                              }
+                              final match = _supplierOptions.firstWhere(
+                                (s) => s['id']?.toString() == val,
+                                orElse: () => <String, dynamic>{},
+                              );
+                              _counterparty = Map<String, dynamic>.from(match);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: _showCreateSupplierDialog,
+                            icon: const Icon(Icons.add_business_outlined),
+                            label: const Text('Добавить нового поставщика'),
+                          ),
+                        ),
+                      ],
+                    ),
             ]),
             const SizedBox(height: 16),
             _buildSection("Документы", [
@@ -483,7 +721,10 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonFormField<String?>(
-                    initialValue: _characteristics[id],
+                    initialValue: _allowedCharacteristics
+                            .contains(_characteristics[id])
+                        ? _characteristics[id]
+                        : null,
                     decoration: _inputDecoration("Тип"),
                     items: const [
                       DropdownMenuItem<String?>(
@@ -520,6 +761,21 @@ class _ManualKPEditorState extends State<ManualKPEditor> {
           OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
       filled: true,
       fillColor: FlutterFlowTheme.of(context).primaryBackground,
+    );
+  }
+
+  InputDecoration _labeledDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      hintText: 'Введите',
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+      ),
+      filled: true,
+      fillColor: FlutterFlowTheme.of(context).secondaryBackground,
     );
   }
 }

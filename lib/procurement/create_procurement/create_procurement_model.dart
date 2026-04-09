@@ -26,6 +26,7 @@ class CreateProcurementModel extends FlutterFlowModel<CreateProcurementWidget> {
   // Approvers for publication approval flow
   List<String> approverIds = [];
   String? selectedApproverId;
+  FormListFieldController<String>? approverIdsController;
   // State field(s) for TabBar widget.
   TabController? tabBarController;
   int get tabBarCurrentIndex =>

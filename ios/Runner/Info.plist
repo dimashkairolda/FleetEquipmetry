@@ -47,8 +47,7 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Вам необходимо дать доступ к камере, чтобы сфотографировать дефект.</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>Ваши данные используются для улучшения работы приложения.</string>
+	
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Для работы с картами и определения вашего местоположения приложению требуется доступ к данным о местоположении.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
